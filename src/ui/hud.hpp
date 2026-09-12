@@ -13,7 +13,7 @@ public:
     /**
      * @brief Render the on-screen telemetry overlay and controller guide onto the framebuffer
      */
-    void render(uint32_t* framebuffer, int width, int height, LIFEngine& engine, float fps);
+    void render(uint32_t* framebuffer, int width, int height, LIFEngine& engine, float fps, bool show_axon_lines = true);
 
 private:
     // Built-in crisp bitmap font renderer

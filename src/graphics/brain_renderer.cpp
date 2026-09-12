@@ -11,19 +11,19 @@ BrainRenderer::~BrainRenderer() = default;
 void BrainRenderer::getNeuropilColor(NeuropilID id, float& r, float& g, float& b) {
     switch (id) {
         case NeuropilID::OpticLobe:
-            r = 0.05f; g = 0.85f; b = 0.95f; // Cyan
+            r = 0.05f; g = 0.85f; b = 0.95f; // Electric Cyan
             break;
         case NeuropilID::CentralComplex:
-            r = 1.00f; g = 0.78f; b = 0.15f; // Amber / Gold
+            r = 1.00f; g = 0.78f; b = 0.15f; // Solar Gold / Amber
             break;
         case NeuropilID::MushroomBody:
-            r = 0.95f; g = 0.20f; b = 0.75f; // Magenta
+            r = 0.95f; g = 0.20f; b = 0.75f; // Neon Magenta
             break;
         case NeuropilID::AntennalLobe:
             r = 0.20f; g = 0.95f; b = 0.35f; // Emerald Green
             break;
         case NeuropilID::SubesophagealZone:
-            r = 0.40f; g = 0.50f; b = 1.00f; // Periwinkle Blue
+            r = 0.45f; g = 0.40f; b = 1.00f; // Lavender Blue
             break;
         case NeuropilID::DescendingMotor:
             r = 1.00f; g = 0.35f; b = 0.10f; // Flame Orange
@@ -46,6 +46,8 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
     if (count == 0 || !neurons) return false;
 
     m_vertices.resize(count);
+    m_projectedPoints.resize(count);
+
     for (uint32_t i = 0; i < count; ++i) {
         BrainVertex& v = m_vertices[i];
         v.x = neurons[i].x;
@@ -74,6 +76,45 @@ void BrainRenderer::resetCamera() {
     m_targetZ = 0.0f;
 }
 
+void BrainRenderer::drawLineBlended(uint32_t* fb, int width, int height, int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, float alpha) {
+    int dx = std::abs(x1 - x0);
+    int dy = std::abs(y1 - y0);
+    int sx = (x0 < x1) ? 1 : -1;
+    int sy = (y0 < y1) ? 1 : -1;
+    int err = dx - dy;
+
+    float inv_a = 1.0f - alpha;
+    uint32_t src_r = static_cast<uint32_t>(r * alpha);
+    uint32_t src_g = static_cast<uint32_t>(g * alpha);
+    uint32_t src_b = static_cast<uint32_t>(b * alpha);
+
+    while (true) {
+        if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
+            uint32_t dst = fb[y0 * width + x0];
+            uint32_t dr = (dst & 0xFF);
+            uint32_t dg = ((dst >> 8) & 0xFF);
+            uint32_t db = ((dst >> 16) & 0xFF);
+
+            uint8_t out_r = static_cast<uint8_t>(std::min(255u, src_r + static_cast<uint32_t>(dr * inv_a)));
+            uint8_t out_g = static_cast<uint8_t>(std::min(255u, src_g + static_cast<uint32_t>(dg * inv_a)));
+            uint8_t out_b = static_cast<uint8_t>(std::min(255u, src_b + static_cast<uint32_t>(db * inv_a)));
+
+            fb[y0 * width + x0] = (0xFF << 24) | (out_b << 16) | (out_g << 8) | out_r;
+        }
+
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if (e2 > -dy) {
+            err -= dy;
+            x0 += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
 void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height, const LIFEngine& engine) {
     if (!framebuffer || m_vertices.empty() || width <= 0 || height <= 0) return;
 
@@ -93,56 +134,96 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height,
     const NeuronState* states = engine.getNeuronStates();
     const uint32_t neuron_count = engine.getNeuronCount();
 
-    for (const auto& v : m_vertices) {
-        // Model to Camera coordinates (relative to target center)
+    // 1. Perspective Project all neurons to screen space & cache
+    for (size_t i = 0; i < m_vertices.size(); ++i) {
+        const auto& v = m_vertices[i];
+        ProjectedPoint& pt = m_projectedPoints[i];
+
         float dx = v.x - m_targetX;
         float dy = v.y - m_targetY;
         float dz = v.z - m_targetZ;
 
-        // Yaw rotation around Y axis
         float rx = dx * cos_y - dz * sin_y;
         float rz = dx * sin_y + dz * cos_y;
 
-        // Pitch rotation around X axis
         float ry = dy * cos_p - rz * sin_p;
         float cam_z = dy * sin_p + rz * cos_p + m_distance;
 
-        // Near-plane clipping
-        if (cam_z < 30.0f) continue;
+        if (cam_z < 30.0f) {
+            pt.valid = false;
+            continue;
+        }
 
-        // Perspective projection
         float inv_z = 1.0f / cam_z;
         int sx = static_cast<int>(half_w + (rx * fov_factor * inv_z));
         int sy = static_cast<int>(half_h - (ry * fov_factor * inv_z));
 
-        // Screen boundary check
-        if (sx < 1 || sx >= width - 1 || sy < 1 || sy >= height - 1) continue;
+        if (sx < 0 || sx >= width || sy < 0 || sy >= height) {
+            pt.valid = false;
+            continue;
+        }
 
-        // Fetch dynamic spike luminance
+        pt.sx = sx;
+        pt.sy = sy;
+        pt.inv_z = inv_z;
+        pt.valid = true;
+    }
+
+    // 2. Render Active Synaptic Transmission Beams / Lines
+    if (m_showAxonLines) {
+        const auto& lines = engine.getActiveLines();
+        for (const auto& l : lines) {
+            if (l.src_idx >= m_projectedPoints.size() || l.dst_idx >= m_projectedPoints.size()) continue;
+
+            const auto& p0 = m_projectedPoints[l.src_idx];
+            const auto& p1 = m_projectedPoints[l.dst_idx];
+
+            if (!p0.valid || !p1.valid) continue;
+
+            float lr, lg, lb;
+            getNeuropilColor(static_cast<NeuropilID>(l.neuropil_id), lr, lg, lb);
+
+            // Lines pulse with bright core, scaled by line life intensity
+            float alpha = std::clamp(l.intensity * 0.70f, 0.05f, 0.95f);
+            uint8_t ur = static_cast<uint8_t>(std::clamp(lr * 255.0f, 0.0f, 255.0f));
+            uint8_t ug = static_cast<uint8_t>(std::clamp(lg * 255.0f, 0.0f, 255.0f));
+            uint8_t ub = static_cast<uint8_t>(std::clamp(lb * 255.0f, 0.0f, 255.0f));
+
+            drawLineBlended(framebuffer, width, height, p0.sx, p0.sy, p1.sx, p1.sy, ur, ug, ub, alpha);
+        }
+    }
+
+    // 3. Render 3D Point Cloud Nodes
+    for (size_t i = 0; i < m_vertices.size(); ++i) {
+        const auto& pt = m_projectedPoints[i];
+        if (!pt.valid) continue;
+
+        const auto& v = m_vertices[i];
         float glow = 0.0f;
         if (v.neuron_idx < neuron_count && states) {
             glow = states[v.neuron_idx].spike_luminance;
         }
 
-        // Color interpolation: base neuropil color blending towards incandescent white on spike
+        // Color blending: base neuropil color -> brilliant incandescent white on spike
         float r_f = std::clamp((v.r * (1.0f - glow) + 1.0f * glow) * 255.0f, 0.0f, 255.0f);
-        float g_f = std::clamp((v.g * (1.0f - glow) + 0.95f * glow) * 255.0f, 0.0f, 255.0f);
-        float b_f = std::clamp((v.b * (1.0f - glow) + 0.85f * glow) * 255.0f, 0.0f, 255.0f);
+        float g_f = std::clamp((v.g * (1.0f - glow) + 0.96f * glow) * 255.0f, 0.0f, 255.0f);
+        float b_f = std::clamp((v.b * (1.0f - glow) + 0.88f * glow) * 255.0f, 0.0f, 255.0f);
 
         uint8_t r = static_cast<uint8_t>(r_f);
         uint8_t g = static_cast<uint8_t>(g_f);
         uint8_t b = static_cast<uint8_t>(b_f);
-
         uint32_t point_color = (0xFF << 24) | (b << 16) | (g << 8) | r;
 
-        // Plot point (single pixel for distant, 3x3 diamond if glowing spike)
-        if (glow > 0.3f) {
-            // Draw glowing halo
-            framebuffer[sy * width + sx] = point_color;
-            framebuffer[(sy - 1) * width + sx] = point_color;
-            framebuffer[(sy + 1) * width + sx] = point_color;
-            framebuffer[sy * width + (sx - 1)] = point_color;
-            framebuffer[sy * width + (sx + 1)] = point_color;
+        int sx = pt.sx;
+        int sy = pt.sy;
+
+        if (glow > 0.25f) {
+            // Glowing diamond halo for firing action potential
+            framebuffer[sy * width + sx] = 0xFFFFFFFF; // Incandescent center
+            if (sx > 0) framebuffer[sy * width + (sx - 1)] = point_color;
+            if (sx + 1 < width) framebuffer[sy * width + (sx + 1)] = point_color;
+            if (sy > 0) framebuffer[(sy - 1) * width + sx] = point_color;
+            if (sy + 1 < height) framebuffer[(sy + 1) * width + sx] = point_color;
         } else {
             framebuffer[sy * width + sx] = point_color;
         }

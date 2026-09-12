@@ -13,6 +13,12 @@ struct BrainVertex {
     uint32_t neuron_idx; // Mapping back to simulation state
 };
 
+struct ProjectedPoint {
+    int sx, sy;
+    float inv_z;
+    bool valid;
+};
+
 class BrainRenderer {
 public:
     BrainRenderer();
@@ -32,10 +38,13 @@ public:
     void updateCamera(float d_yaw, float d_pitch, float d_zoom);
     void resetCamera();
 
+    void toggleAxonLines() { m_showAxonLines = !m_showAxonLines; }
+    bool areAxonLinesEnabled() const { return m_showAxonLines; }
+
     /**
-     * @brief Render the 3D point cloud into a 32-bit RGBA framebuffer (1280x720)
+     * @brief Render the 3D point cloud & active synaptic transmission lines
      * @param framebuffer Pointer to width * height * 4 RGBA bytes
-     * @param engine Reference to active simulation engine for dynamic spike luminance
+     * @param engine Reference to active simulation engine
      */
     void renderSoftware(uint32_t* framebuffer, int width, int height, const LIFEngine& engine);
 
@@ -45,8 +54,10 @@ public:
 
 private:
     std::vector<BrainVertex> m_vertices;
+    std::vector<ProjectedPoint> m_projectedPoints;
     int m_screenWidth = 1280;
     int m_screenHeight = 720;
+    bool m_showAxonLines = true;
 
     // Orbit Camera Parameters
     float m_yaw = 0.0f;
@@ -58,6 +69,9 @@ private:
 
     // Color lookup helper
     static void getNeuropilColor(NeuropilID id, float& r, float& g, float& b);
+
+    // Fast rasterization line helper
+    static void drawLineBlended(uint32_t* fb, int width, int height, int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, float alpha);
 };
 
 } // namespace flybrain

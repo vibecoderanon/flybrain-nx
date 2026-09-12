@@ -103,7 +103,12 @@ else
 
 DEPENDS := $(OFILES:.o=.d)
 
+NROFLAGS := --nacp=$(OUTPUT).nacp --icon=$(TOPDIR)/icon.jpg --romfsdir=$(TOPDIR)/$(ROMFS)
+
 $(OUTPUT).nro   :   $(OUTPUT).elf $(OUTPUT).nacp
+	@echo creating $(notdir $@)
+	@elf2nro $< $@ $(NROFLAGS)
+
 $(OUTPUT).elf   :   $(OFILES)
 
 %.o: %.cpp

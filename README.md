@@ -86,6 +86,7 @@ Experience direct sensory-to-motor stimulation across the biological brain lobes
 * **(A) Button:** Antennal odor puff (stimulates olfactory receptor neurons in the Antennal Lobe).
 * **(R3) Right Stick Click:** Virtual predator looming shadow (triggers bilateral Giant Fiber emergency escape jump).
 * **(X) Button:** Cycle simulation speed mode (`Raw` $\rightarrow$ `Real-Time 1kHz` $\rightarrow$ `High-Speed`).
+* **(Y) Button:** Toggle Dynamic Synaptic Axon Lines (`ON` / `OFF`) to visualize directional electrical transmission beams between active neurons.
 * **(+) Button:** Clean exit to Horizon OS HOME Menu.
 
 ---

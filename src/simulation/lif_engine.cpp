@@ -28,6 +28,8 @@ bool LIFEngine::init(const ConnectomeLoader& loader) {
     // Allocate neuron states and double-buffered input accumulators
     m_states.resize(m_numNeurons);
     m_synapticInputAccumulator = std::vector<std::atomic<float>>(m_numNeurons);
+    m_activeLines.clear();
+    m_activeLines.reserve(MAX_ACTIVE_LINES);
 
     for (uint32_t i = 0; i < m_numNeurons; ++i) {
         m_states[i].V = V_REST;
@@ -66,9 +68,9 @@ void LIFEngine::injectSensoryModality(uint8_t modality, uint8_t channel, float c
 
 void LIFEngine::injectOpticFlow(float horizontal_flow, float vertical_flow) {
     // Left eye vs right eye differential stimulation for yaw visual drift
-    float left_stim  = std::max(0.0f, -horizontal_flow) * 15.0f;
-    float right_stim = std::max(0.0f,  horizontal_flow) * 15.0f;
-    float pitch_stim = std::abs(vertical_flow) * 8.0f;
+    float left_stim  = std::max(0.0f, -horizontal_flow) * 18.0f;
+    float right_stim = std::max(0.0f,  horizontal_flow) * 18.0f;
+    float pitch_stim = std::abs(vertical_flow) * 10.0f;
 
     injectSensoryModality(0, 0, left_stim + pitch_stim);  // Left compound eye
     injectSensoryModality(0, 1, right_stim + pitch_stim); // Right compound eye
@@ -76,18 +78,18 @@ void LIFEngine::injectOpticFlow(float horizontal_flow, float vertical_flow) {
 
 void LIFEngine::injectOdorPuff(float intensity) {
     // Stimulate antennal olfactory receptor neurons
-    injectSensoryModality(1, 0, intensity * 20.0f);
+    injectSensoryModality(1, 0, intensity * 24.0f);
 }
 
 void LIFEngine::injectTaste(bool sweet, float intensity) {
     // 2=Sweet (proboscis extension / forward approach), 3=Bitter (avoidance)
     uint8_t modality = sweet ? 2 : 3;
-    injectSensoryModality(modality, 0, intensity * 25.0f);
+    injectSensoryModality(modality, 0, intensity * 28.0f);
 }
 
 void LIFEngine::injectPredatorLoom() {
-    // Giant Fiber emergency reflex: bilateral visual burst to Medulla / Lobula giant movement detector
-    injectSensoryModality(0, 0xFF, 50.0f);
+    // Giant Fiber emergency reflex: bilateral visual burst
+    injectSensoryModality(0, 0xFF, 55.0f);
 }
 
 void LIFEngine::step(float dt_ms) {
@@ -100,6 +102,16 @@ void LIFEngine::step(float dt_ms) {
     SpeedMode active_mode = m_speedMode.load(std::memory_order_acquire);
     uint32_t active_spikes = 0;
     float total_V = 0.0f;
+
+    // 1. Spontaneous biological baseline noise (sparse Poisson-like hum)
+    // 0.2% probability per tick for each of ~20 random neurons to receive gentle noise
+    for (int k = 0; k < 25; ++k) {
+        m_stepRandState ^= (m_stepRandState << 13);
+        m_stepRandState ^= (m_stepRandState >> 17);
+        m_stepRandState ^= (m_stepRandState << 5);
+        uint32_t target = m_stepRandState % m_numNeurons;
+        m_synapticInputAccumulator[target].fetch_add(1.8f, std::memory_order_relaxed);
+    }
 
     // Local temporary buffer of spiking neurons to propagate after integration
     std::vector<uint32_t> spiking_neurons;
@@ -143,11 +155,21 @@ void LIFEngine::step(float dt_ms) {
         }
 
         // Smoothly decay visual luminance for 3D glow display
-        state.spike_luminance = std::max(0.0f, state.spike_luminance * 0.90f);
+        state.spike_luminance = std::max(0.0f, state.spike_luminance * 0.85f);
         total_V += state.V;
     }
 
-    // Synaptic Propagation Phase (O(1) loop bounds based on speed mode)
+    // 2. Synaptic Propagation Phase (O(1) loop bounds based on speed mode)
+    // Age existing synaptic lines first
+    for (auto it = m_activeLines.begin(); it != m_activeLines.end(); ) {
+        it->intensity -= 0.18f;
+        if (it->intensity <= 0.0f) {
+            it = m_activeLines.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
     for (uint32_t spike_idx : spiking_neurons) {
         const NeuronRecord& n = m_neurons[spike_idx];
 
@@ -165,17 +187,32 @@ void LIFEngine::step(float dt_ms) {
         }
 
         const SynapseRecord* syn_base = &m_synapses[n.synapse_offset];
+        uint32_t lines_added_for_this_spike = 0;
+
         for (uint32_t s = 0; s < syn_count; ++s) {
             const SynapseRecord& syn = syn_base[s];
-            float w = static_cast<float>(syn.weight);
+
+            // Unitary EPSP scaling factor calibrated to prevent epileptic runaway
+            float w = static_cast<float>(syn.weight) * EPSP_SCALE;
             if (syn.is_inhibitory) {
-                w = -w;
+                w = -w * GABA_SCALE;
             }
             m_synapticInputAccumulator[syn.target_neuron_idx].fetch_add(w, std::memory_order_relaxed);
+
+            // Record active synaptic beam for 3D visualizer (sample up to 4 primary lines per spike)
+            if (lines_added_for_this_spike < 4 && m_activeLines.size() < MAX_ACTIVE_LINES) {
+                SynapticLineEvent line{};
+                line.src_idx = spike_idx;
+                line.dst_idx = syn.target_neuron_idx;
+                line.intensity = 1.0f;
+                line.neuropil_id = n.neuropil_id;
+                m_activeLines.push_back(line);
+                lines_added_for_this_spike++;
+            }
         }
     }
 
-    // Motor Readout Integration
+    // 3. Motor Readout Integration
     float forward_spikes = 0.0f;
     float steer_left_spikes = 0.0f;
     float steer_right_spikes = 0.0f;
@@ -213,6 +250,7 @@ void LIFEngine::updateTelemetry(uint32_t spikes_in_second, uint32_t ticks_in_sec
     m_telemetry.simulation_hz = static_cast<float>(ticks_in_second);
     m_telemetry.total_spikes_recent = spikes_in_second;
     m_telemetry.current_speed_mode = m_speedMode.load(std::memory_order_relaxed);
+    m_telemetry.active_line_count = static_cast<uint32_t>(m_activeLines.size());
 
     // Active synapse count depending on mode
     uint64_t total_active = 0;
@@ -232,6 +270,7 @@ void LIFEngine::updateTelemetry(uint32_t spikes_in_second, uint32_t ticks_in_sec
 }
 
 SimulationTelemetry LIFEngine::getTelemetry() {
+    m_telemetry.active_line_count = static_cast<uint32_t>(m_activeLines.size());
     return m_telemetry;
 }
 

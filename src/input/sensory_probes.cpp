@@ -64,6 +64,12 @@ bool SensoryProbes::pollAndProcess(LIFEngine& engine, BrainRenderer& renderer) {
     }
     m_prevBtnX = m_input.btn_x;
 
+    // 2. Toggle Synaptic Axon Lines with Y button
+    if (m_input.btn_y && !m_prevBtnY) {
+        renderer.toggleAxonLines();
+    }
+    m_prevBtnY = m_input.btn_y;
+
     // 2. Drive 3D Camera with Right Stick
     const float deadzone = 0.15f;
     float rx = (std::abs(m_input.right_stick_x) > deadzone) ? m_input.right_stick_x : 0.0f;

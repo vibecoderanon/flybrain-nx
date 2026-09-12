@@ -100,26 +100,31 @@ int main(int argc, char* argv[]) {
         }
 
         // B. Step SNN Simulation
-        // In Real-Time mode, step 16ms of neural time per 60Hz frame
-        for (int step_idx = 0; step_idx < 16; ++step_idx) {
+        // Adaptive step budget to ensure a smooth, stable 60 FPS rendering rate
+        int steps_per_frame = 4;
+        if (engine.getSpeedMode() == flybrain::SpeedMode::HighSpeed) {
+            steps_per_frame = 8;
+        }
+        for (int step_idx = 0; step_idx < steps_per_frame; ++step_idx) {
             engine.step(1.0f);
         }
 
         // C. Update Embodied Arena
         arena.update(engine, dt);
 
-        // D. Render 3D Point Cloud & Telemetry HUD
+        // D. Render 3D Point Cloud, Active Axon Lines & Telemetry HUD
+        bool lines_on = renderer.areAxonLinesEnabled();
 #ifdef __SWITCH__
         u32 stride = 0;
         uint32_t* fb_ptr = reinterpret_cast<uint32_t*>(framebufferBegin(&fb, &stride));
         if (fb_ptr) {
             renderer.renderSoftware(fb_ptr, 1280, 720, engine);
-            hud.render(fb_ptr, 1280, 720, engine, fps);
+            hud.render(fb_ptr, 1280, 720, engine, fps, lines_on);
             framebufferEnd(&fb);
         }
 #else
         renderer.renderSoftware(host_fb.data(), 1280, 720, engine);
-        hud.render(host_fb.data(), 1280, 720, engine, fps);
+        hud.render(host_fb.data(), 1280, 720, engine, fps, lines_on);
 #endif
     }
 

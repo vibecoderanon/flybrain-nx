@@ -180,11 +180,11 @@ void TelemetryHUD::drawProgressBar(uint32_t* fb, int fb_w, int fb_h, int x, int 
     }
 }
 
-void TelemetryHUD::render(uint32_t* framebuffer, int width, int height, LIFEngine& engine, float fps) {
+void TelemetryHUD::render(uint32_t* framebuffer, int width, int height, LIFEngine& engine, float fps, bool show_axon_lines) {
     SimulationTelemetry tel = engine.getTelemetry();
 
     // 1. Top Header Banner
-    drawRectFilled(framebuffer, width, height, 20, 20, 480, 220, 0xDD0D1322);
+    drawRectFilled(framebuffer, width, height, 20, 20, 480, 235, 0xDD0D1322);
 
     drawString(framebuffer, width, height, 35, 30, "flybrain-nx // Drosophila SNN", 0xFF00E5FF); // Bright Cyan
     
@@ -218,8 +218,11 @@ void TelemetryHUD::render(uint32_t* framebuffer, int width, int height, LIFEngin
     snprintf(buf, sizeof(buf), "Spikes/sec: %u", tel.total_spikes_recent);
     drawString(framebuffer, width, height, 35, 155, buf, 0xFFB9F6CA);
 
-    snprintf(buf, sizeof(buf), "Press [X] to cycle Speed Mode");
-    drawString(framebuffer, width, height, 35, 190, buf, 0xFFFFAB00);
+    snprintf(buf, sizeof(buf), "Axon Lines: [%s] (%u active)", show_axon_lines ? "ON" : "OFF", tel.active_line_count);
+    drawString(framebuffer, width, height, 35, 180, buf, show_axon_lines ? 0xFF00E5FF : 0xFF78909C);
+
+    snprintf(buf, sizeof(buf), "[X] Speed Mode  |  [Y] Toggle Lines");
+    drawString(framebuffer, width, height, 35, 205, buf, 0xFFFFAB00);
 
     // 2. Neuropil Activity Meters (Top Right Panel)
     drawRectFilled(framebuffer, width, height, width - 420, 20, 400, 240, 0xDD0D1322);
@@ -250,7 +253,7 @@ void TelemetryHUD::render(uint32_t* framebuffer, int width, int height, LIFEngin
 
     // 3. Controller Guide Banner (Bottom)
     drawRectFilled(framebuffer, width, height, 20, height - 65, width - 40, 45, 0xDD0D1322);
-    const char* controls = "L-Stick: Optic Flow | R-Stick: Camera Orbit | ZL/ZR: Sweet/Bitter | A: Odor | R3: Predator | (+): Exit";
+    const char* controls = "L-Stick: Optic Flow | R-Stick: Orbit | ZL/ZR: Taste | A: Odor | Y: Lines | X: Speed | (+): Exit";
     drawString(framebuffer, width, height, 35, height - 52, controls, 0xFFCFD8DC);
 }
 

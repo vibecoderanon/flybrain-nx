@@ -23,6 +23,13 @@ struct NeuronState {
     float spike_luminance;    // Visual decay factor (1.0f on spike -> 0.0f)
 };
 
+struct SynapticLineEvent {
+    uint32_t src_idx;
+    uint32_t dst_idx;
+    float intensity;          // 1.0f on spike, fades to 0.0f
+    uint8_t neuropil_id;
+};
+
 struct NeuropilStats {
     uint32_t spike_count_recent;
     float firing_rate_hz;
@@ -36,6 +43,7 @@ struct SimulationTelemetry {
     float simulation_hz;
     SpeedMode current_speed_mode;
     uint32_t active_synapse_count;
+    uint32_t active_line_count;
     NeuropilStats neuropils[9]; // Indexed by NeuropilID
 };
 
@@ -90,15 +98,19 @@ public:
     // Telemetry & State Access
     const NeuronState* getNeuronStates() const { return m_states.data(); }
     uint32_t getNeuronCount() const { return m_numNeurons; }
+    const std::vector<SynapticLineEvent>& getActiveLines() const { return m_activeLines; }
     SimulationTelemetry getTelemetry();
 
-    // Constant biological parameters (Shiu et al. 2024 defaults)
-    static constexpr float V_REST     = -52.0f; // mV
-    static constexpr float V_THRESH   = -45.0f; // mV
-    static constexpr float V_RESET    = -52.0f; // mV
-    static constexpr float TAU_M      = 20.0f;  // Membrane time constant (ms)
-    static constexpr float TAU_SYN    = 5.0f;   // Synaptic current decay (ms)
-    static constexpr uint16_t REFRAC_TICKS = 2; // 2 ms refractory period
+    // Constant biological parameters (calibrated for stable E/I homeostatic balance)
+    static constexpr float V_REST       = -52.0f; // Resting potential (mV)
+    static constexpr float V_THRESH     = -45.0f; // Threshold (mV) (7 mV delta)
+    static constexpr float V_RESET      = -52.0f; // Reset potential (mV)
+    static constexpr float TAU_M        = 20.0f;  // Membrane time constant (ms)
+    static constexpr float TAU_SYN      = 5.0f;   // Synaptic current decay (ms)
+    static constexpr uint16_t REFRAC_TICKS = 3;   // 3 ms refractory period
+    static constexpr float EPSP_SCALE   = 0.12f;  // Unitary EPSP scaling factor
+    static constexpr float GABA_SCALE   = 1.60f;  // Inhibitory scaling for stable balance
+    static constexpr size_t MAX_ACTIVE_LINES = 800; // Visual transmission beams buffer limit
 
 private:
     void workerLoop();
@@ -113,6 +125,7 @@ private:
 
     std::vector<NeuronState> m_states;
     std::vector<std::atomic<float>> m_synapticInputAccumulator;
+    std::vector<SynapticLineEvent> m_activeLines;
 
     std::atomic<SpeedMode> m_speedMode{SpeedMode::RealTime1kHz};
     std::atomic<bool> m_running{false};
@@ -130,6 +143,7 @@ private:
     uint32_t m_ticksCounter = 0;
     uint32_t m_spikesCounter = 0;
     uint32_t m_neuropilSpikeCounters[9]{};
+    uint32_t m_stepRandState = 123456789;
 };
 
 } // namespace flybrain

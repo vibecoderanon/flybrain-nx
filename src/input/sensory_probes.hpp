@@ -40,6 +40,7 @@ public:
 private:
     InputState m_input{};
     bool m_prevBtnX = false;
+    bool m_prevBtnY = false;
 };
 
 } // namespace flybrain
