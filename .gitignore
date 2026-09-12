@@ -1,0 +1,17 @@
+# Intermediate build artifacts
+build/
+*.o
+*.d
+*.map
+*.elf
+*.nacp
+
+# Python cache
+__pycache__/
+*.pyc
+
+# System / Editor caches
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db

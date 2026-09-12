@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+  <name>flybrain-nx</name>
+  <author>vibecoderanon</author>
+  <version>1.0.0</version>
+  <category>Neuroscience / Simulation</category>
+  <description>Adult Drosophila Melanogaster Connectome SNN Homebrew &amp; 3D Brain Activity Visualizer</description>
+</config>

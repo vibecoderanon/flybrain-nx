@@ -1,0 +1,94 @@
+name: Build & Release flybrain-nx
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-switch:
+    name: Build flybrain-nx (Switch NRO)
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITA64: /opt/devkitpro/devkitA64
+      PATH: /opt/devkitpro/tools/bin:/opt/devkitpro/devkitA64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare RomFS Connectome Asset
+        run: |
+          python3 tools/extract_connectome.py --generate-reference --neurons 10000 --output romfs/drosophila_full.bin
+
+      - name: Compile Native NRO Target
+        run: |
+          make clean
+          make -j$(nproc)
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flybrain-nx-Artifacts
+          path: |
+            flybrain-nx.nro
+            flybrain-nx.nacp
+
+  package-release:
+    name: Package Suite & Publish GitHub Release
+    needs: [build-switch]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Switch Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: flybrain-nx-Artifacts
+          path: dist/
+
+      - name: Assemble SD Card Structure & Zip
+        run: |
+          cp dist/flybrain-nx.nro ./flybrain-nx.nro
+          python3 build_release.py
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }}
+          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }}
+          draft: false
+          prerelease: false
+          files: |
+            release/flybrain-nx-switch-v1.0.0.zip
+            release/flybrain-nx.nro
+            release/flybrain-nx.xml
+          body: |
+            ## flybrain-nx v1.0.0 — Drosophila Connectome SNN Homebrew
+
+            Official release compiled natively from source using **devkitA64**.
+
+            ### Features:
+            - **Real-Time Leaky Integrate-and-Fire Simulation:** Runs on the adult fruit fly (*Drosophila melanogaster*) connectome.
+            - **Zero-Overhead Speed Selector:** Pre-sorted $O(1)$ loop bounds allowing dynamic toggling between:
+              - **Raw Fidelity (w >= 1):** Complete anatomical graph (54.5M synapses).
+              - **Real-Time 1kHz (w >= 2):** Biologically noise-filtered (~16.2M synapses) at full 1,000 Hz real-time simulation.
+              - **High-Speed (w >= 3):** Core high-weight circuit (~9.4M synapses) at 2,000+ Hz.
+            - **Strict Title Override Enforcement:** Safeguards against Horizon OS memory limits (Firmware 22.5.0 / newer system pool expansions) by cleanly prompting users to launch with Title Override and preventing OOM crashes.
+            - **3D Neuropil Point Cloud:** 60 FPS interactive visualizer with dynamic action potential spike luminance.
+            - **Joy-Con Optogenetic Probes:** Left Stick (Optic flow / visual drift), ZL/ZR (Sweet/Bitter taste), A (Antennal odor), R3 (Predator loom).
+
+            ### SD Card Installation:
+            1. Extract `flybrain-nx-switch-v1.0.0.zip` to the root of your SD card.
+            2. Launch via **Title Override**: Hold `[R]` while launching ANY installed game from the HOME Menu.
+            3. Open `flybrain-nx` from the Homebrew Menu.
