@@ -29,6 +29,10 @@ jobs:
         run: |
           python3 tools/extract_connectome.py --generate-reference --neurons 10000 --output romfs/drosophila_full.bin
 
+      - name: Run Picross & SNN Logic Verification Suite
+        run: |
+          python3 tests/test_picross_logic.py
+
       - name: Compile Native NRO Target
         run: |
           make clean
@@ -65,30 +69,31 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }}
-          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.0' }}
+          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.0' }}
           draft: false
           prerelease: false
           files: |
-            release/flybrain-nx-switch-v1.0.0.zip
+            release/flybrain-nx-switch-v1.1.0.zip
             release/flybrain-nx.nro
             release/flybrain-nx.xml
           body: |
-            ## flybrain-nx v1.0.0 — Drosophila Connectome SNN Homebrew
+            ## flybrain-nx v1.1.0 — The Fruit Fly Brain Solves Picross!
 
             Official release compiled natively from source using **devkitA64**.
 
-            ### Features:
-            - **Real-Time Leaky Integrate-and-Fire Simulation:** Runs on the adult fruit fly (*Drosophila melanogaster*) connectome.
-            - **Zero-Overhead Speed Selector:** Pre-sorted $O(1)$ loop bounds allowing dynamic toggling between:
-              - **Raw Fidelity (w >= 1):** Complete anatomical graph (54.5M synapses).
-              - **Real-Time 1kHz (w >= 2):** Biologically noise-filtered (~16.2M synapses) at full 1,000 Hz real-time simulation.
-              - **High-Speed (w >= 3):** Core high-weight circuit (~9.4M synapses) at 2,000+ Hz.
-            - **Strict Title Override Enforcement:** Safeguards against Horizon OS memory limits (Firmware 22.5.0 / newer system pool expansions) by cleanly prompting users to launch with Title Override and preventing OOM crashes.
-            - **3D Neuropil Point Cloud:** 60 FPS interactive visualizer with dynamic action potential spike luminance.
-            - **Joy-Con Optogenetic Probes:** Left Stick (Optic flow / visual drift), ZL/ZR (Sweet/Bitter taste), A (Antennal odor), R3 (Predator loom).
+            ### What's New in v1.1.0:
+            - **Biological Neuromorphic Picross Solver (SNN-CSP):** The full *Drosophila melanogaster* connectome (~139k neurons, ~50M synapses) operates as a constraint satisfaction attractor network to solve Nonograms.
+            - **Split-Screen Dual Viewports (1280×720):**
+              - **Left Panel (640×720):** Interactive Picross board with dynamic numeric clues, strikethroughs, cell cursors, and an animated embodied fruit fly avatar navigating tiles to ink squares with its proboscis or scratch crosses with its legs.
+              - **Right Panel (640×720):** 3D rotating Drosophila connectome with real-time axon vector lines connecting active neural clusters as clues are evaluated.
+            - **Autonomous & Manual Game Modes:**
+              - **Autopilot (Fly Solves):** Watch the fly brain autonomously evaluate row/column constraints and solve puzzles step-by-step.
+              - **Manual Play:** Play traditional Nonograms using Joy-Con D-Pad and buttons with real-time neural sensory feedback.
+            - **Built-in Handcrafted Puzzle Catalog:** 8 hand-designed 5×5 and 10×10 puzzles (Fruit Fly, Heart SOUL, Master Sword, Nintendo Switch, Super Mushroom, Drosophila Larva, Brain Connectome, Space Invader).
+            - **Firmware 22.5.0 Safe:** Strict Title Override intercept prevents Horizon OS memory crashes out of the box.
 
             ### SD Card Installation:
-            1. Extract `flybrain-nx-switch-v1.0.0.zip` to the root of your SD card.
+            1. Extract `flybrain-nx-switch-v1.1.0.zip` to the root of your SD card (`sdmc:/switch/flybrain-nx/`).
             2. Launch via **Title Override**: Hold `[R]` while launching ANY installed game from the HOME Menu.
             3. Open `flybrain-nx` from the Homebrew Menu.

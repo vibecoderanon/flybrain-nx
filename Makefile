@@ -27,7 +27,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 TARGET      := flybrain-nx
 BUILD       := build
-SOURCES     := src src/guard src/connectome src/simulation src/graphics src/input src/arena src/ui
+SOURCES     := src src/guard src/connectome src/simulation src/graphics src/input src/arena src/ui src/picross
 DATA        := data
 INCLUDES    := src
 ROMFS       := romfs
@@ -59,8 +59,8 @@ LIBDIRS := $(PORTLIBS) $(LIBNX)
 #---------------------------------------------------------------------------------
 APP_TITLE       := flybrain-nx
 APP_AUTHOR      := vibecoderanon
-APP_VERSION     := 1.0.0
-APP_DESCRIPTION := Drosophila Connectome SNN Homebrew & 3D Brain Activity Visualizer
+APP_VERSION     := 1.1.0
+APP_DESCRIPTION := Biological Neuromorphic Picross Solver & Drosophila Connectome SNN
 
 #---------------------------------------------------------------------------------
 # Standard devkitA64 libnx build rules

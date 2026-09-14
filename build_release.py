@@ -26,7 +26,7 @@ ICON_PNG = os.path.join(BASE_DIR, "icon.png")
 
 APP_TITLE = "flybrain-nx"
 APP_AUTHOR = "vibecoderanon"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 def ensure_icon_png():
     """Generates icon.png from icon.jpg if not present."""
@@ -123,8 +123,8 @@ def generate_xml_metadata(xml_path: str):
   <name>{APP_TITLE}</name>
   <author>{APP_AUTHOR}</author>
   <version>{APP_VERSION}</version>
-  <category>Neuroscience / Simulation</category>
-  <description>Adult Drosophila Melanogaster Connectome SNN Homebrew &amp; 3D Brain Activity Visualizer</description>
+  <category>Games / Neuromorphic / Picross</category>
+  <description>Biological Neuromorphic Picross Solver &amp; Drosophila Connectome SNN Homebrew</description>
 </config>
 """
     with open(xml_path, "w", encoding="utf-8") as f:

@@ -44,9 +44,16 @@ public:
     /**
      * @brief Render the 3D point cloud & active synaptic transmission lines
      * @param framebuffer Pointer to width * height * 4 RGBA bytes
+     * @param stride Screen framebuffer row width in pixels (e.g. 1280)
+     * @param height Screen framebuffer total height (e.g. 720)
      * @param engine Reference to active simulation engine
+     * @param vp_x Viewport X offset (e.g. 640 for right half split-screen)
+     * @param vp_y Viewport Y offset (e.g. 0)
+     * @param vp_w Viewport width (e.g. 640)
+     * @param vp_h Viewport height (e.g. 680)
      */
-    void renderSoftware(uint32_t* framebuffer, int width, int height, const LIFEngine& engine);
+    void renderSoftware(uint32_t* framebuffer, int stride, int height, const LIFEngine& engine,
+                        int vp_x = 0, int vp_y = 0, int vp_w = 1280, int vp_h = 720);
 
     float getCameraYaw() const { return m_yaw; }
     float getCameraPitch() const { return m_pitch; }
@@ -70,8 +77,10 @@ private:
     // Color lookup helper
     static void getNeuropilColor(NeuropilID id, float& r, float& g, float& b);
 
-    // Fast rasterization line helper
-    static void drawLineBlended(uint32_t* fb, int width, int height, int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, float alpha);
+    // Fast rasterization line helper with viewport clipping
+    static void drawLineBlended(uint32_t* fb, int stride, int height, int x0, int y0, int x1, int y1,
+                                uint8_t r, uint8_t g, uint8_t b, float alpha,
+                                int min_x, int min_y, int max_x, int max_y);
 };
 
 } // namespace flybrain

@@ -6,21 +6,18 @@
 
 namespace flybrain {
 
-struct InputState {
-    float left_stick_x = 0.0f;
-    float left_stick_y = 0.0f;
-    float right_stick_x = 0.0f;
-    float right_stick_y = 0.0f;
-    bool trigger_zl = false;
-    bool trigger_zr = false;
-    bool btn_a = false;
-    bool btn_b = false;
-    bool btn_x = false;
-    bool btn_y = false;
-    bool btn_plus = false;
-    bool btn_r3 = false;
-    bool dpad_up = false;
-    bool dpad_down = false;
+struct PicrossInputActions {
+    bool move_up = false;
+    bool move_down = false;
+    bool move_left = false;
+    bool move_right = false;
+    bool action_fill = false;
+    bool action_cross = false;
+    bool toggle_autopilot = false;
+    bool toggle_axons = false;
+    bool prev_puzzle = false;
+    bool next_puzzle = false;
+    bool exit_requested = false;
 };
 
 class SensoryProbes {
@@ -31,16 +28,19 @@ public:
     void init();
 
     /**
-     * @brief Polls inputs (from Switch libnx or mock state) and drives simulation & camera
+     * @brief Polls inputs (Joy-Con or mock) and returns high-level Picross game actions
      */
-    bool pollAndProcess(LIFEngine& engine, BrainRenderer& renderer);
-
-    const InputState& getCurrentInput() const { return m_input; }
+    PicrossInputActions poll(BrainRenderer& renderer);
 
 private:
-    InputState m_input{};
+    float m_stickRepeatTimerX = 0.0f;
+    float m_stickRepeatTimerY = 0.0f;
+    bool m_prevBtnA = false;
+    bool m_prevBtnB = false;
     bool m_prevBtnX = false;
     bool m_prevBtnY = false;
+    bool m_prevBtnL = false;
+    bool m_prevBtnR = false;
 };
 
 } // namespace flybrain

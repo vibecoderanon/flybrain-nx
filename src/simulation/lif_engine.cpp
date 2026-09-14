@@ -45,6 +45,14 @@ bool LIFEngine::init(const ConnectomeLoader& loader) {
     m_spikesCounter = 0;
     std::fill(std::begin(m_neuropilSpikeCounters), std::end(m_neuropilSpikeCounters), 0);
 
+    // Initialize tile neuron cluster mappings (up to 100 tiles for 10x10)
+    m_tileNeuronClusters.resize(100);
+    for (uint32_t t = 0; t < 100; ++t) {
+        // Distribute evenly across connectome with Central Complex / Optic bias
+        m_tileNeuronClusters[t] = (t * 7919) % m_numNeurons;
+    }
+    m_picrossFocusNeuron = m_tileNeuronClusters[0];
+
     return true;
 }
 
@@ -90,6 +98,80 @@ void LIFEngine::injectTaste(bool sweet, float intensity) {
 void LIFEngine::injectPredatorLoom() {
     // Giant Fiber emergency reflex: bilateral visual burst
     injectSensoryModality(0, 0xFF, 55.0f);
+}
+
+void LIFEngine::bindPicrossBoard(PicrossBoard* board) {
+    m_picrossBoard = board;
+}
+
+void LIFEngine::updatePicrossSensoryFeedback() {
+    if (!m_picrossBoard || m_numNeurons == 0) return;
+
+    int h = m_picrossBoard->getHeight();
+    int w = m_picrossBoard->getWidth();
+
+    // 1. Evaluate Rows: dopamine reward if satisfied, GABAergic inhibition if contradiction
+    for (int r = 0; r < h; ++r) {
+        if (m_picrossBoard->isRowSatisfied(r)) {
+            // Mushroom body dopamine burst (positive reinforcement)
+            for (int c = 0; c < w; ++c) {
+                uint32_t n_idx = m_tileNeuronClusters[(r * w + c) % m_tileNeuronClusters.size()];
+                injectCurrent(n_idx, 3.5f);
+            }
+        } else if (m_picrossBoard->isRowContradiction(r)) {
+            // GABAergic aversive burst (suppress candidate neurons in this row)
+            for (int c = 0; c < w; ++c) {
+                uint32_t n_idx = m_tileNeuronClusters[(r * w + c) % m_tileNeuronClusters.size()];
+                injectCurrent(n_idx, -8.0f);
+            }
+        }
+    }
+
+    // 2. Evaluate Columns
+    for (int c = 0; c < w; ++c) {
+        if (m_picrossBoard->isColSatisfied(c)) {
+            for (int r = 0; r < h; ++r) {
+                uint32_t n_idx = m_tileNeuronClusters[(r * w + c) % m_tileNeuronClusters.size()];
+                injectCurrent(n_idx, 3.5f);
+            }
+        } else if (m_picrossBoard->isColContradiction(c)) {
+            for (int r = 0; r < h; ++r) {
+                uint32_t n_idx = m_tileNeuronClusters[(r * w + c) % m_tileNeuronClusters.size()];
+                injectCurrent(n_idx, -8.0f);
+            }
+        }
+    }
+}
+
+bool LIFEngine::stepPicrossSolver(int& out_r, int& out_c, CellState& out_action) {
+    if (!m_picrossBoard || m_picrossBoard->isSolved()) return false;
+
+    updatePicrossSensoryFeedback();
+
+    // Find next deterministic/probabilistic deduction from attractor state
+    if (m_picrossBoard->findNextDeduction(out_r, out_c, out_action)) {
+        int w = m_picrossBoard->getWidth();
+        uint32_t cluster_idx = (out_r * w + out_c) % m_tileNeuronClusters.size();
+        m_picrossFocusNeuron = m_tileNeuronClusters[cluster_idx];
+
+        // Trigger action potential in target coordinate neuron
+        injectCurrent(m_picrossFocusNeuron, 35.0f);
+
+        // Motor branch:
+        if (out_action == CellState::Filled) {
+            // Proboscis extension / SEZ feeding motor burst
+            injectTaste(true, 1.2f);
+        } else {
+            // Grooming / leg scratching motor burst
+            injectTaste(false, 0.8f);
+        }
+
+        // Apply deduction to board
+        m_picrossBoard->setCell(out_r, out_c, out_action);
+        return true;
+    }
+
+    return false;
 }
 
 void LIFEngine::step(float dt_ms) {

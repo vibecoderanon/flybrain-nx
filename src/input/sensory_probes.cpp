@@ -22,95 +22,72 @@ void SensoryProbes::init() {
 #endif
 }
 
-bool SensoryProbes::pollAndProcess(LIFEngine& engine, BrainRenderer& renderer) {
+PicrossInputActions SensoryProbes::poll(BrainRenderer& renderer) {
+    PicrossInputActions actions{};
+
 #ifdef __SWITCH__
     padUpdate(&s_pad);
     u64 kDown = padGetButtonsDown(&s_pad);
     u64 kHeld = padGetButtons(&s_pad);
 
     if (kDown & HidNpadButton_Plus) {
-        return false; // Exit requested
+        actions.exit_requested = true;
     }
 
     HidAnalogStickState l_stick = padGetStickPos(&s_pad, 0);
     HidAnalogStickState r_stick = padGetStickPos(&s_pad, 1);
 
-    m_input.left_stick_x = static_cast<float>(l_stick.x) / 32767.0f;
-    m_input.left_stick_y = static_cast<float>(l_stick.y) / 32767.0f;
-    m_input.right_stick_x = static_cast<float>(r_stick.x) / 32767.0f;
-    m_input.right_stick_y = static_cast<float>(r_stick.y) / 32767.0f;
+    float lx = static_cast<float>(l_stick.x) / 32767.0f;
+    float ly = static_cast<float>(l_stick.y) / 32767.0f;
+    float rx = static_cast<float>(r_stick.x) / 32767.0f;
+    float ry = static_cast<float>(r_stick.y) / 32767.0f;
 
-    m_input.trigger_zl = (kHeld & HidNpadButton_ZL) != 0;
-    m_input.trigger_zr = (kHeld & HidNpadButton_ZR) != 0;
-    m_input.btn_a = (kHeld & HidNpadButton_A) != 0;
-    m_input.btn_b = (kHeld & HidNpadButton_B) != 0;
-    m_input.btn_x = (kDown & HidNpadButton_X) != 0;
-    m_input.btn_y = (kDown & HidNpadButton_Y) != 0;
-    m_input.btn_r3 = (kDown & HidNpadButton_StickR) != 0;
-    m_input.dpad_up = (kDown & HidNpadButton_Up) != 0;
-    m_input.dpad_down = (kDown & HidNpadButton_Down) != 0;
+    // D-Pad and Left Stick navigation
+    const float deadzone = 0.45f;
+    if ((kDown & HidNpadButton_Up) || (ly > deadzone && m_stickRepeatTimerY <= 0.0f)) {
+        actions.move_up = true;
+        m_stickRepeatTimerY = 0.20f;
+    } else if ((kDown & HidNpadButton_Down) || (ly < -deadzone && m_stickRepeatTimerY <= 0.0f)) {
+        actions.move_down = true;
+        m_stickRepeatTimerY = 0.20f;
+    }
+
+    if ((kDown & HidNpadButton_Left) || (lx < -deadzone && m_stickRepeatTimerX <= 0.0f)) {
+        actions.move_left = true;
+        m_stickRepeatTimerX = 0.20f;
+    } else if ((kDown & HidNpadButton_Right) || (lx > deadzone && m_stickRepeatTimerX <= 0.0f)) {
+        actions.move_right = true;
+        m_stickRepeatTimerX = 0.20f;
+    }
+
+    if (std::abs(lx) <= deadzone) m_stickRepeatTimerX = 0.0f;
+    else if (m_stickRepeatTimerX > 0.0f) m_stickRepeatTimerX -= 0.016f;
+
+    if (std::abs(ly) <= deadzone) m_stickRepeatTimerY = 0.0f;
+    else if (m_stickRepeatTimerY > 0.0f) m_stickRepeatTimerY -= 0.016f;
+
+    // Action buttons
+    actions.action_fill = (kDown & HidNpadButton_A) != 0;
+    actions.action_cross = (kDown & HidNpadButton_B) != 0;
+    actions.toggle_autopilot = (kDown & HidNpadButton_X) != 0;
+    actions.toggle_axons = (kDown & HidNpadButton_Y) != 0;
+    actions.prev_puzzle = (kDown & (HidNpadButton_L | HidNpadButton_ZL)) != 0;
+    actions.next_puzzle = (kDown & (HidNpadButton_R | HidNpadButton_ZR)) != 0;
+
+    // Orbit 3D Brain Camera with Right Stick
+    const float cam_deadzone = 0.15f;
+    float crx = (std::abs(rx) > cam_deadzone) ? rx : 0.0f;
+    float cry = (std::abs(ry) > cam_deadzone) ? ry : 0.0f;
+    if (crx != 0.0f || cry != 0.0f) {
+        renderer.updateCamera(crx * 0.04f, cry * 0.04f, 0.0f);
+    }
 #endif
 
-    // 1. Cycle Speed Selector with X button
-    if (m_input.btn_x && !m_prevBtnX) {
-        SpeedMode current = engine.getSpeedMode();
-        if (current == SpeedMode::RealTime1kHz) {
-            engine.setSpeedMode(SpeedMode::RawFidelity);
-        } else if (current == SpeedMode::RawFidelity) {
-            engine.setSpeedMode(SpeedMode::HighSpeed);
-        } else {
-            engine.setSpeedMode(SpeedMode::RealTime1kHz);
-        }
-    }
-    m_prevBtnX = m_input.btn_x;
-
-    // 2. Toggle Synaptic Axon Lines with Y button
-    if (m_input.btn_y && !m_prevBtnY) {
+    if (actions.toggle_axons) {
         renderer.toggleAxonLines();
     }
-    m_prevBtnY = m_input.btn_y;
 
-    // 2. Drive 3D Camera with Right Stick
-    const float deadzone = 0.15f;
-    float rx = (std::abs(m_input.right_stick_x) > deadzone) ? m_input.right_stick_x : 0.0f;
-    float ry = (std::abs(m_input.right_stick_y) > deadzone) ? m_input.right_stick_y : 0.0f;
-
-    // Right stick X orbits yaw, Right stick Y orbits pitch
-    renderer.updateCamera(rx * 0.04f, ry * 0.04f, 0.0f);
-
-    // D-Pad Up/Down zooms in/out
-    if (m_input.dpad_up) renderer.updateCamera(0.0f, 0.0f, -40.0f);
-    if (m_input.dpad_down) renderer.updateCamera(0.0f, 0.0f, 40.0f);
-
-    // 3. Optogenetic Sensory Stimulation
-    // Left Stick -> Compound eye optic flow motion (yaw drift & pitch)
-    float lx = (std::abs(m_input.left_stick_x) > deadzone) ? m_input.left_stick_x : 0.0f;
-    float ly = (std::abs(m_input.left_stick_y) > deadzone) ? m_input.left_stick_y : 0.0f;
-    if (lx != 0.0f || ly != 0.0f) {
-        engine.injectOpticFlow(lx, ly);
-    }
-
-    // ZL -> Sweet taste (proboscis extension / forward approach)
-    if (m_input.trigger_zl) {
-        engine.injectTaste(true, 1.0f);
-    }
-
-    // ZR -> Bitter taste (aversive retreat / stop)
-    if (m_input.trigger_zr) {
-        engine.injectTaste(false, 1.0f);
-    }
-
-    // A Button -> Antennal odor puff (olfactory receptor stimulation)
-    if (m_input.btn_a) {
-        engine.injectOdorPuff(1.0f);
-    }
-
-    // R3 (Click Right Stick) -> Giant Fiber looming predator escape reflex
-    if (m_input.btn_r3) {
-        engine.injectPredatorLoom();
-    }
-
-    return true; // Keep running
+    return actions;
 }
 
 } // namespace flybrain

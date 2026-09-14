@@ -2,6 +2,7 @@
 
 #include "../connectome/connectome_format.hpp"
 #include "../connectome/connectome_loader.hpp"
+#include "../picross/picross_board.hpp"
 #include <vector>
 #include <atomic>
 #include <thread>
@@ -95,6 +96,14 @@ public:
     float getMotorYaw() const { return m_motorYaw; }
     bool  getMotorEscapeTriggered() const { return m_motorEscapeTriggered; }
 
+    /**
+     * @brief Picross Neuromorphic SNN Solver Interface
+     */
+    void bindPicrossBoard(PicrossBoard* board);
+    void updatePicrossSensoryFeedback();
+    bool stepPicrossSolver(int& out_r, int& out_c, CellState& out_action);
+    uint32_t getPicrossFocusNeuron() const { return m_picrossFocusNeuron; }
+
     // Telemetry & State Access
     const NeuronState* getNeuronStates() const { return m_states.data(); }
     uint32_t getNeuronCount() const { return m_numNeurons; }
@@ -131,6 +140,11 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_paused{false};
     std::thread m_workerThread;
+
+    // Picross solver state
+    PicrossBoard* m_picrossBoard = nullptr;
+    uint32_t m_picrossFocusNeuron = 0;
+    std::vector<uint32_t> m_tileNeuronClusters; // Mapping of (r, c) to representative neurons
 
     // Motor output integration
     float m_motorThrust = 0.0f;

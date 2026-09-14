@@ -76,7 +76,9 @@ void BrainRenderer::resetCamera() {
     m_targetZ = 0.0f;
 }
 
-void BrainRenderer::drawLineBlended(uint32_t* fb, int width, int height, int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b, float alpha) {
+void BrainRenderer::drawLineBlended(uint32_t* fb, int stride, int height, int x0, int y0, int x1, int y1,
+                                    uint8_t r, uint8_t g, uint8_t b, float alpha,
+                                    int min_x, int min_y, int max_x, int max_y) {
     int dx = std::abs(x1 - x0);
     int dy = std::abs(y1 - y0);
     int sx = (x0 < x1) ? 1 : -1;
@@ -89,8 +91,8 @@ void BrainRenderer::drawLineBlended(uint32_t* fb, int width, int height, int x0,
     uint32_t src_b = static_cast<uint32_t>(b * alpha);
 
     while (true) {
-        if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height) {
-            uint32_t dst = fb[y0 * width + x0];
+        if (x0 >= min_x && x0 < max_x && y0 >= min_y && y0 < max_y && y0 < height) {
+            uint32_t dst = fb[y0 * stride + x0];
             uint32_t dr = (dst & 0xFF);
             uint32_t dg = ((dst >> 8) & 0xFF);
             uint32_t db = ((dst >> 16) & 0xFF);
@@ -99,7 +101,7 @@ void BrainRenderer::drawLineBlended(uint32_t* fb, int width, int height, int x0,
             uint8_t out_g = static_cast<uint8_t>(std::min(255u, src_g + static_cast<uint32_t>(dg * inv_a)));
             uint8_t out_b = static_cast<uint8_t>(std::min(255u, src_b + static_cast<uint32_t>(db * inv_a)));
 
-            fb[y0 * width + x0] = (0xFF << 24) | (out_b << 16) | (out_g << 8) | out_r;
+            fb[y0 * stride + x0] = (0xFF << 24) | (out_b << 16) | (out_g << 8) | out_r;
         }
 
         if (x0 == x1 && y0 == y1) break;
@@ -115,24 +117,31 @@ void BrainRenderer::drawLineBlended(uint32_t* fb, int width, int height, int x0,
     }
 }
 
-void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height, const LIFEngine& engine) {
-    if (!framebuffer || m_vertices.empty() || width <= 0 || height <= 0) return;
+void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height, const LIFEngine& engine,
+                                   int vp_x, int vp_y, int vp_w, int vp_h) {
+    if (!framebuffer || m_vertices.empty() || stride <= 0 || height <= 0 || vp_w <= 0 || vp_h <= 0) return;
 
-    // Clear background to dark obsidian navy (#0b0f19)
+    int max_x = std::min(stride, vp_x + vp_w);
+    int max_y = std::min(height, vp_y + vp_h);
+
+    // Clear background of this viewport to obsidian navy (#0b0f19)
     const uint32_t bg_color = 0xFF0B0F19;
-    std::fill_n(framebuffer, width * height, bg_color);
+    for (int y = vp_y; y < max_y; ++y) {
+        std::fill_n(&framebuffer[y * stride + vp_x], max_x - vp_x, bg_color);
+    }
 
     const float cos_y = std::cos(m_yaw);
     const float sin_y = std::sin(m_yaw);
     const float cos_p = std::cos(m_pitch);
     const float sin_p = std::sin(m_pitch);
 
-    const float fov_factor = static_cast<float>(height) * 0.90f;
-    const float half_w = width * 0.5f;
-    const float half_h = height * 0.5f;
+    const float fov_factor = static_cast<float>(vp_h) * 0.90f;
+    const float half_w = static_cast<float>(vp_x) + static_cast<float>(vp_w) * 0.5f;
+    const float half_h = static_cast<float>(vp_y) + static_cast<float>(vp_h) * 0.5f;
 
     const NeuronState* states = engine.getNeuronStates();
     const uint32_t neuron_count = engine.getNeuronCount();
+    const uint32_t focus_neuron = engine.getPicrossFocusNeuron();
 
     // 1. Perspective Project all neurons to screen space & cache
     for (size_t i = 0; i < m_vertices.size(); ++i) {
@@ -158,7 +167,7 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height,
         int sx = static_cast<int>(half_w + (rx * fov_factor * inv_z));
         int sy = static_cast<int>(half_h - (ry * fov_factor * inv_z));
 
-        if (sx < 0 || sx >= width || sy < 0 || sy >= height) {
+        if (sx < vp_x || sx >= max_x || sy < vp_y || sy >= max_y) {
             pt.valid = false;
             continue;
         }
@@ -189,7 +198,8 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height,
             uint8_t ug = static_cast<uint8_t>(std::clamp(lg * 255.0f, 0.0f, 255.0f));
             uint8_t ub = static_cast<uint8_t>(std::clamp(lb * 255.0f, 0.0f, 255.0f));
 
-            drawLineBlended(framebuffer, width, height, p0.sx, p0.sy, p1.sx, p1.sy, ur, ug, ub, alpha);
+            drawLineBlended(framebuffer, stride, height, p0.sx, p0.sy, p1.sx, p1.sy,
+                            ur, ug, ub, alpha, vp_x, vp_y, max_x, max_y);
         }
     }
 
@@ -204,10 +214,19 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height,
             glow = states[v.neuron_idx].spike_luminance;
         }
 
+        bool is_focus = (v.neuron_idx == focus_neuron);
+        if (is_focus) {
+            glow = std::max(glow, 0.85f);
+        }
+
         // Color blending: base neuropil color -> brilliant incandescent white on spike
         float r_f = std::clamp((v.r * (1.0f - glow) + 1.0f * glow) * 255.0f, 0.0f, 255.0f);
         float g_f = std::clamp((v.g * (1.0f - glow) + 0.96f * glow) * 255.0f, 0.0f, 255.0f);
         float b_f = std::clamp((v.b * (1.0f - glow) + 0.88f * glow) * 255.0f, 0.0f, 255.0f);
+
+        if (is_focus) {
+            r_f = 255.0f; g_f = 215.0f; b_f = 0.0f; // Radiant Gold
+        }
 
         uint8_t r = static_cast<uint8_t>(r_f);
         uint8_t g = static_cast<uint8_t>(g_f);
@@ -217,15 +236,23 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int width, int height,
         int sx = pt.sx;
         int sy = pt.sy;
 
-        if (glow > 0.25f) {
+        if (glow > 0.25f || is_focus) {
             // Glowing diamond halo for firing action potential
-            framebuffer[sy * width + sx] = 0xFFFFFFFF; // Incandescent center
-            if (sx > 0) framebuffer[sy * width + (sx - 1)] = point_color;
-            if (sx + 1 < width) framebuffer[sy * width + (sx + 1)] = point_color;
-            if (sy > 0) framebuffer[(sy - 1) * width + sx] = point_color;
-            if (sy + 1 < height) framebuffer[(sy + 1) * width + sx] = point_color;
+            framebuffer[sy * stride + sx] = 0xFFFFFFFF; // Incandescent center
+            if (sx > vp_x) framebuffer[sy * stride + (sx - 1)] = point_color;
+            if (sx + 1 < max_x) framebuffer[sy * stride + (sx + 1)] = point_color;
+            if (sy > vp_y) framebuffer[(sy - 1) * stride + sx] = point_color;
+            if (sy + 1 < max_y) framebuffer[(sy + 1) * stride + sx] = point_color;
+
+            if (is_focus) {
+                // Outer ring for focus neuron
+                if (sx > vp_x + 1) framebuffer[sy * stride + (sx - 2)] = 0xFFF59E0B;
+                if (sx + 2 < max_x) framebuffer[sy * stride + (sx + 2)] = 0xFFF59E0B;
+                if (sy > vp_y + 1) framebuffer[(sy - 2) * stride + sx] = 0xFFF59E0B;
+                if (sy + 2 < max_y) framebuffer[(sy + 2) * stride + sx] = 0xFFF59E0B;
+            }
         } else {
-            framebuffer[sy * width + sx] = point_color;
+            framebuffer[sy * stride + sx] = point_color;
         }
     }
 }
