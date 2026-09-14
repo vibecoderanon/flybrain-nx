@@ -5,6 +5,7 @@ build/
 *.map
 *.elf
 *.nacp
+/flybrain-nx.nro
 
 # Python cache
 __pycache__/
