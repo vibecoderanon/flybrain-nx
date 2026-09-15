@@ -1,4 +1,5 @@
 #include "brain_renderer.hpp"
+#include "../ui/draw_utils.hpp"
 #include <cmath>
 #include <algorithm>
 #include <cstring>
@@ -48,14 +49,40 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
     m_vertices.resize(count);
     m_projectedPoints.resize(count);
 
+    struct Acc { float sum_x = 0; float sum_y = 0; float sum_z = 0; uint32_t count = 0; };
+    Acc acc[9]{};
+
     for (uint32_t i = 0; i < count; ++i) {
         BrainVertex& v = m_vertices[i];
         v.x = neurons[i].x;
         v.y = neurons[i].y;
         v.z = neurons[i].z;
         v.neuron_idx = i;
+        v.neuropil_id = neurons[i].neuropil_id;
         getNeuropilColor(static_cast<NeuropilID>(neurons[i].neuropil_id), v.r, v.g, v.b);
+
+        uint8_t nid = neurons[i].neuropil_id;
+        if (nid < 9) {
+            acc[nid].sum_x += neurons[i].x;
+            acc[nid].sum_y += neurons[i].y;
+            acc[nid].sum_z += neurons[i].z;
+            acc[nid].count++;
+        }
     }
+
+    m_centroids.clear();
+    auto addCentroid = [&](NeuropilID id, const char* name, uint32_t col) {
+        uint8_t nid = static_cast<uint8_t>(id);
+        if (nid < 9 && acc[nid].count > 0) {
+            float inv = 1.0f / static_cast<float>(acc[nid].count);
+            m_centroids.push_back({id, name, acc[nid].sum_x * inv, acc[nid].sum_y * inv, acc[nid].sum_z * inv, col});
+        }
+    };
+
+    addCentroid(NeuropilID::OpticLobe, "[OPTIC LOBES]", 0xFF06B6D4);
+    addCentroid(NeuropilID::CentralComplex, "[CENTRAL COMPLEX]", 0xFFF59E0B);
+    addCentroid(NeuropilID::MushroomBody, "[MUSHROOM BODY]", 0xFFF43F5E);
+    addCentroid(NeuropilID::SubesophagealZone, "[MOTOR SEZ]", 0xFFF97316);
 
     resetCamera();
     return true;
@@ -118,7 +145,8 @@ void BrainRenderer::drawLineBlended(uint32_t* fb, int stride, int height, int x0
 }
 
 void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height, const LIFEngine& engine,
-                                   int vp_x, int vp_y, int vp_w, int vp_h) {
+                                   int vp_x, int vp_y, int vp_w, int vp_h,
+                                   int cognitive_phase) {
     if (!framebuffer || m_vertices.empty() || stride <= 0 || height <= 0 || vp_w <= 0 || vp_h <= 0) return;
 
     int max_x = std::min(stride, vp_x + vp_w);
@@ -214,6 +242,18 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
             glow = states[v.neuron_idx].spike_luminance;
         }
 
+        // Deliberation pathway spotlighting
+        if (cognitive_phase == 1 && v.neuropil_id == static_cast<uint8_t>(NeuropilID::OpticLobe)) {
+            glow = std::max(glow, 0.70f);
+        } else if (cognitive_phase == 2 && v.neuropil_id == static_cast<uint8_t>(NeuropilID::CentralComplex)) {
+            glow = std::max(glow, 0.75f);
+        } else if (cognitive_phase == 3 && v.neuropil_id == static_cast<uint8_t>(NeuropilID::MushroomBody)) {
+            glow = std::max(glow, 0.80f);
+        } else if (cognitive_phase == 4 && (v.neuropil_id == static_cast<uint8_t>(NeuropilID::SubesophagealZone) ||
+                                            v.neuropil_id == static_cast<uint8_t>(NeuropilID::DescendingMotor))) {
+            glow = std::max(glow, 0.85f);
+        }
+
         bool is_focus = (v.neuron_idx == focus_neuron);
         if (is_focus) {
             glow = std::max(glow, 0.85f);
@@ -253,6 +293,30 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
             }
         } else {
             framebuffer[sy * stride + sx] = point_color;
+        }
+    }
+
+    // 4. Render 3D Anatomical Neuropil Badges
+    for (const auto& c : m_centroids) {
+        float dx = c.x - m_targetX;
+        float dy = c.y - m_targetY;
+        float dz = c.z - m_targetZ;
+
+        float rx = dx * cos_y - dz * sin_y;
+        float rz = dx * sin_y + dz * cos_y;
+        float ry = dy * cos_p - rz * sin_p;
+        float cam_z = dy * sin_p + rz * cos_p + m_distance;
+
+        if (cam_z < 50.0f) continue;
+
+        float inv_z = 1.0f / cam_z;
+        int sx = static_cast<int>(half_w + (rx * fov_factor * inv_z));
+        int sy = static_cast<int>(half_h - (ry * fov_factor * inv_z));
+
+        // Display labels neatly within viewport bounds
+        if (sx >= vp_x + 15 && sx <= max_x - 130 && sy >= vp_y + 70 && sy <= max_y - 20) {
+            DrawUtils::drawCircleFilled(framebuffer, stride, height, sx, sy, 3, c.color);
+            DrawUtils::drawString(framebuffer, stride, height, sx + 6, sy - 4, c.name, c.color, 1);
         }
     }
 }

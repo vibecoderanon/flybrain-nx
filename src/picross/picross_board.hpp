@@ -64,6 +64,11 @@ public:
     // Find next deterministic logical deduction for the entire board
     // Returns true if a deduction was found, and sets out_r, out_c, out_state
     bool findNextDeduction(int& out_r, int& out_c, CellState& out_state) const;
+    bool findNextDeductionEx(int& out_r, int& out_c, CellState& out_state, int& out_scan_type, int& out_scan_idx) const;
+
+    void setActiveScan(int scan_type, int scan_idx) { m_activeScanType = scan_type; m_activeScanIdx = scan_idx; }
+    int getActiveScanType() const { return m_activeScanType; } // -1=none, 0=row, 1=col
+    int getActiveScanIdx() const { return m_activeScanIdx; }
 
     // Ground truth solution (if available)
     bool hasSolution() const { return !m_solution.empty(); }
@@ -76,6 +81,8 @@ private:
     std::vector<std::vector<int>> m_rowClues;
     std::vector<std::vector<int>> m_colClues;
     std::vector<CellState> m_solution;
+    int m_activeScanType = -1; // -1 = none, 0 = row, 1 = col
+    int m_activeScanIdx = -1;
 };
 
 } // namespace flybrain

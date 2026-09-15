@@ -69,31 +69,43 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.0' }}
-          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.0' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.0' }}
+          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.0' }}
           draft: false
           prerelease: false
           files: |
-            release/flybrain-nx-switch-v1.1.0.zip
+            release/flybrain-nx-switch-v1.2.0.zip
             release/flybrain-nx.nro
             release/flybrain-nx.xml
           body: |
-            ## flybrain-nx v1.1.0 — The Fruit Fly Brain Solves Picross!
+            ## flybrain-nx v1.2.0 — Drosophila Connectome Picross: Viral Overhaul
 
             Official release compiled natively from source using **devkitA64**.
 
-            ### What's New in v1.1.0:
-            - **Biological Neuromorphic Picross Solver (SNN-CSP):** The full *Drosophila melanogaster* connectome (~139k neurons, ~50M synapses) operates as a constraint satisfaction attractor network to solve Nonograms.
-            - **Split-Screen Dual Viewports (1280×720):**
-              - **Left Panel (640×720):** Interactive Picross board with dynamic numeric clues, strikethroughs, cell cursors, and an animated embodied fruit fly avatar navigating tiles to ink squares with its proboscis or scratch crosses with its legs.
-              - **Right Panel (640×720):** 3D rotating Drosophila connectome with real-time axon vector lines connecting active neural clusters as clues are evaluated.
-            - **Autonomous & Manual Game Modes:**
-              - **Autopilot (Fly Solves):** Watch the fly brain autonomously evaluate row/column constraints and solve puzzles step-by-step.
-              - **Manual Play:** Play traditional Nonograms using Joy-Con D-Pad and buttons with real-time neural sensory feedback.
-            - **Built-in Handcrafted Puzzle Catalog:** 8 hand-designed 5×5 and 10×10 puzzles (Fruit Fly, Heart SOUL, Master Sword, Nintendo Switch, Super Mushroom, Drosophila Larva, Brain Connectome, Space Invader).
-            - **Firmware 22.5.0 Safe:** Strict Title Override intercept prevents Horizon OS memory crashes out of the box.
+            ### What's New in v1.2.0:
+            - **Biological Spectator Neural Gauges (Stonkfly / Doomfly Inspired):**
+              - **[🍬 PAM11 DOPAMINE]:** Spikes radiant emerald green (+3.5mV) when a clue constraint is satisfied or progress advances.
+              - **[⚡ PPL101 AVERSIVE]:** Flashes crimson on contradiction or constraint violations.
+              - **[👁️ OPTIC SCAN]:** Electric cyan meter illuminates while reading row/column clues.
+              - **[🧭 COMPASS (CX)]:** Solar gold meter indicates active central complex heading calculation.
+            - **Strict Physical-First Causality (4-Stage Thought Cycle):**
+              - *Scan $\rightarrow$ Crawl $\rightarrow$ Inspect $\rightarrow$ Actuate*: Zero premature tile mutation.
+              - Tiles mutate and clues strike through **only on the exact frame the proboscis touches the paper** with an expanding ink droplet animation!
+            - **Live Thought Monologue Banner:**
+              - Real-time narration capsule displaying the fly's observations, hypotheses, and physical actuation decisions.
+            - **Sensory Scan Reticle & Clue Laser Highlighting:**
+              - Amber laser targeting beam across active row/column clues connecting the fly's eyes to the puzzle constraints.
+            - **3D Anatomical Neuropil Badges & Deliberation Highway Spotlight:**
+              - Floating 3D labels for `[OPTIC LOBES]`, `[MUSHROOM BODY]`, `[CENTRAL COMPLEX]`, and `[MOTOR SEZ]`.
+              - Active functional brain regions illuminate in high contrast as signals propagate from sensory input to motor output.
+            - **Multi-Pacing Selector (`[X]` Joy-Con Button):**
+              - **Observational Mode (Default, ~2.2s):** Human-readable pacing to watch brain reasoning and physical crawling.
+              - **Fast Mode (~0.9s):** Rapid solving with preserved physical contact synchronization.
+              - **Step-by-Step Mode (`[A]`):** Advance each logical deduction on command.
+              - **Manual Play:** Direct Joy-Con control with real-time neural sensory feedback.
+            - **Firmware 22.5.0 Safe:** Strict Title Override intercept prevents Horizon OS memory crashes.
 
             ### SD Card Installation:
-            1. Extract `flybrain-nx-switch-v1.1.0.zip` to the root of your SD card (`sdmc:/switch/flybrain-nx/`).
+            1. Extract `flybrain-nx-switch-v1.2.0.zip` to the root of your SD card (`sdmc:/switch/flybrain-nx/`).
             2. Launch via **Title Override**: Hold `[R]` while launching ANY installed game from the HOME Menu.
             3. Open `flybrain-nx` from the Homebrew Menu.

@@ -26,7 +26,7 @@ ICON_PNG = os.path.join(BASE_DIR, "icon.png")
 
 APP_TITLE = "flybrain-nx"
 APP_AUTHOR = "vibecoderanon"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 def ensure_icon_png():
     """Generates icon.png from icon.jpg if not present."""

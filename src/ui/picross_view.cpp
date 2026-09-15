@@ -27,7 +27,7 @@ void PicrossView::getGridOrigin(int grid_w, int grid_h, float& out_ox, float& ou
     float clue_margin_y = (grid_h <= 5) ? 65.0f : 90.0f;
 
     out_ox = (static_cast<float>(m_panelWidth) - grid_total_w + clue_margin_x) * 0.5f;
-    out_oy = (static_cast<float>(m_panelHeight) - grid_total_h + clue_margin_y) * 0.5f - 10.0f;
+    out_oy = (static_cast<float>(m_panelHeight) - grid_total_h + clue_margin_y) * 0.5f + 14.0f;
 }
 
 void PicrossView::drawCell(uint32_t* fb, int screen_w, int screen_h, int x, int y, int size, CellState state, bool is_cursor) {
@@ -123,11 +123,23 @@ void PicrossView::drawFly(uint32_t* fb, int screen_w, int screen_h, const FlyPic
     DrawUtils::drawCircleFilled(fb, screen_w, screen_h, e1x, e1y, 3, 0xFFDC2626);
     DrawUtils::drawCircleFilled(fb, screen_w, screen_h, e2x, e2y, 3, 0xFFDC2626);
 
-    // 7. Proboscis (extended when inking)
-    if (fly.state == FlyActionState::Inking) {
-        int px, py;
-        transform(14.0f, 0.0f, px, py);
-        DrawUtils::drawCircleFilled(fb, screen_w, screen_h, px, py, 4, 0xFF0284C7); // Ink drop
+    // 7. Proboscis & Actuation
+    if (fly.state == FlyActionState::Actuating) {
+        if (fly.pending_action == CellState::Filled) {
+            float p_len = 10.0f + fly.proboscis_ext * 8.0f;
+            int px, py;
+            transform(p_len, 0.0f, px, py);
+            int drop_r = static_cast<int>(3.0f + fly.proboscis_ext * 5.0f);
+            DrawUtils::drawCircleFilled(fb, screen_w, screen_h, px, py, drop_r, 0xFF38BDF8); // Cyan ink glow
+            DrawUtils::drawCircleFilled(fb, screen_w, screen_h, px, py, std::max(1, drop_r - 2), 0xFF0284C7); // Ink drop core
+        } else {
+            int l1x, l1y, l2x, l2y;
+            float scratch = std::sin(fly.wing_phase * 1.5f) * 4.0f;
+            transform(13.0f + scratch, -5.0f, l1x, l1y);
+            transform(13.0f - scratch,  5.0f, l2x, l2y);
+            DrawUtils::drawLine(fb, screen_w, screen_h, hx, hy, l1x, l1y, 0xFFEF4444);
+            DrawUtils::drawLine(fb, screen_w, screen_h, hx, hy, l2x, l2y, 0xFFEF4444);
+        }
     }
 }
 
@@ -162,6 +174,15 @@ void PicrossView::render(uint32_t* fb, int screen_w, int screen_h,
     } else {
         DrawUtils::drawString(fb, screen_w, screen_h, 300, 44, "[MANUAL PLAY: JOY-CON]", 0xFF4ADE80, 1);
     }
+
+    // Live Thought Monologue Banner (Stonkfly / Doomfly inspired)
+    int capsule_x = 24;
+    int capsule_y = 60;
+    int capsule_w = m_panelWidth - 48;
+    int capsule_h = 24;
+    DrawUtils::drawRectFilled(fb, screen_w, screen_h, capsule_x, capsule_y, capsule_w, capsule_h, 0xEE1E293B);
+    DrawUtils::drawRectOutline(fb, screen_w, screen_h, capsule_x, capsule_y, capsule_w, capsule_h, 1, 0xFF38BDF8);
+    DrawUtils::drawString(fb, screen_w, screen_h, capsule_x + 10, capsule_y + 7, arena.getFly().thought_text, 0xFFF1F5F9, 1);
 
     // 3. Grid Geometry
     int gw = board.getWidth();
@@ -255,10 +276,26 @@ void PicrossView::render(uint32_t* fb, int screen_w, int screen_h,
         DrawUtils::drawRectFilled(fb, screen_w, screen_h, div_x - 1, oy, 2, total_h, major_divider);
     }
 
-    // 8. Render Embodied Fly Avatar
+    // 8. Sensory Scan Reticle & Laser Clue Targeting
+    int scan_type = board.getActiveScanType();
+    int scan_idx = board.getActiveScanIdx();
+
+    if (scan_type == 0 && scan_idx >= 0 && scan_idx < gh) {
+        int ry = oy + scan_idx * tile_size;
+        int clue_w = (gw <= 5) ? 75 : 95;
+        DrawUtils::drawRectOutline(fb, screen_w, screen_h, ox - clue_w, ry + 1, clue_w - 4, tile_size - 2, 2, 0xFFF59E0B);
+        DrawUtils::drawLine(fb, screen_w, screen_h, ox, ry + tile_size / 2, ox + total_w, ry + tile_size / 2, 0xFFF59E0B);
+    } else if (scan_type == 1 && scan_idx >= 0 && scan_idx < gw) {
+        int cx = ox + scan_idx * tile_size;
+        int clue_h = (gw <= 5) ? 75 : 95;
+        DrawUtils::drawRectOutline(fb, screen_w, screen_h, cx + 1, oy - clue_h, tile_size - 2, clue_h - 4, 2, 0xFFF59E0B);
+        DrawUtils::drawLine(fb, screen_w, screen_h, cx + tile_size / 2, oy, cx + tile_size / 2, oy + total_h, 0xFFF59E0B);
+    }
+
+    // 9. Render Embodied Fly Avatar
     drawFly(fb, screen_w, screen_h, arena.getFly());
 
-    // 9. Victory Banner Overlay
+    // 10. Victory Banner Overlay
     if (board.isSolved()) {
         int banner_w = 440;
         int banner_h = 70;

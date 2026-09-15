@@ -2,7 +2,7 @@
 <config>
   <name>flybrain-nx</name>
   <author>vibecoderanon</author>
-  <version>1.1.0</version>
+  <version>1.2.0</version>
   <category>Games / Neuromorphic / Picross</category>
   <description>Biological Neuromorphic Picross Solver &amp; Drosophila Connectome SNN Homebrew</description>
 </config>

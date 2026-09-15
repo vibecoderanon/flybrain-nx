@@ -11,12 +11,20 @@ struct BrainVertex {
     float x, y, z;       // Model space coordinates
     float r, g, b;       // Base neuropil color
     uint32_t neuron_idx; // Mapping back to simulation state
+    uint8_t neuropil_id; // Anatomical neuropil partition
 };
 
 struct ProjectedPoint {
     int sx, sy;
     float inv_z;
     bool valid;
+};
+
+struct NeuropilCentroid {
+    NeuropilID id;
+    const char* name;
+    float x, y, z;
+    uint32_t color;
 };
 
 class BrainRenderer {
@@ -51,9 +59,11 @@ public:
      * @param vp_y Viewport Y offset (e.g. 0)
      * @param vp_w Viewport width (e.g. 640)
      * @param vp_h Viewport height (e.g. 680)
+     * @param cognitive_phase Current fly thought stage (1=Scan, 2=Walk, 3=Inspect, 4=Actuate)
      */
     void renderSoftware(uint32_t* framebuffer, int stride, int height, const LIFEngine& engine,
-                        int vp_x = 0, int vp_y = 0, int vp_w = 1280, int vp_h = 720);
+                        int vp_x = 0, int vp_y = 0, int vp_w = 1280, int vp_h = 720,
+                        int cognitive_phase = 0);
 
     float getCameraYaw() const { return m_yaw; }
     float getCameraPitch() const { return m_pitch; }
@@ -62,6 +72,7 @@ public:
 private:
     std::vector<BrainVertex> m_vertices;
     std::vector<ProjectedPoint> m_projectedPoints;
+    std::vector<NeuropilCentroid> m_centroids;
     int m_screenWidth = 1280;
     int m_screenHeight = 720;
     bool m_showAxonLines = true;

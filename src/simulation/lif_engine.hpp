@@ -102,7 +102,23 @@ public:
     void bindPicrossBoard(PicrossBoard* board);
     void updatePicrossSensoryFeedback();
     bool stepPicrossSolver(int& out_r, int& out_c, CellState& out_action);
+    bool prepareNextDeduction(int& out_r, int& out_c, CellState& out_action, int& out_scan_type, int& out_scan_idx);
+    void commitDeduction(int r, int c, CellState action);
     uint32_t getPicrossFocusNeuron() const { return m_picrossFocusNeuron; }
+
+    /**
+     * @brief Spectator Biological Neural Gauges (Stonkfly / Doomfly Inspired)
+     */
+    float getDopamineLevel() const { return m_dopaminePAM11; }
+    float getAversiveLevel() const { return m_aversivePPL101; }
+    float getOpticScanLevel() const { return m_opticScanLevel; }
+    float getCompassLevel() const { return m_compassCXLevel; }
+
+    void triggerDopamineSpike(float amount = 1.0f);
+    void triggerAversiveSpike(float amount = 1.0f);
+    void setOpticScanActive(bool active);
+    void setCompassActive(bool active);
+    void updateMeters(float dt_sec);
 
     // Telemetry & State Access
     const NeuronState* getNeuronStates() const { return m_states.data(); }
@@ -150,6 +166,12 @@ private:
     float m_motorThrust = 0.0f;
     float m_motorYaw = 0.0f;
     bool m_motorEscapeTriggered = false;
+
+    // Spectator neural gauges (Stonkfly / Doomfly inspired)
+    float m_dopaminePAM11 = 0.0f;
+    float m_aversivePPL101 = 0.0f;
+    float m_opticScanLevel = 0.0f;
+    float m_compassCXLevel = 0.0f;
 
     // Telemetry storage
     SimulationTelemetry m_telemetry{};

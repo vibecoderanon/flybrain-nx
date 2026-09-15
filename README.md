@@ -10,22 +10,81 @@
 An authentic Nintendo Switch homebrew application where the simulated biological fruit fly brain (*Drosophila melanogaster* connectome: **139,255 neurons and 54,498,591 synapses**) **actively solves Picross (Nonogram) puzzles** using a **neuromorphic Spiking Neural Network Constraint Satisfaction Solver (SNN-CSP)**.
 
 Features a dual split-screen interface rendered at 60 FPS:
-* **Left Viewport (640×720):** High-contrast Picross puzzle board with interactive clues, completed line strikethroughs, tile cursors, and an animated embodied fruit fly avatar crawling across the grid to ink cells with its proboscis or scratch crosses with its front legs.
-* **Right Viewport (640×720):** Rotating 3D fruit fly brain with real-time **dynamic axon transmission lines** that illuminate between active neural clusters as clues are evaluated and constraint hypotheses are tested.
+* **Left Viewport (640×720):** High-contrast Picross puzzle board with dynamic numeric clues, line completed strikethroughs, live **Thought Monologue Banner**, **Sensory Scan Reticle** (laser clue beam), and an embodied fruit fly avatar crawling across the grid to ink cells with its proboscis or scratch crosses with its legs.
+* **Right Viewport (640×720):** Rotating 3D fruit fly brain with **Spectator Neural Gauges** ([🍬 PAM11 Dopamine], [⚡ PPL101 Aversive], [👁️ Optic Scan], [🧭 Compass CX]), floating 3D anatomical labels ([OPTIC LOBES], [MUSHROOM BODY], [CENTRAL COMPLEX], [MOTOR SEZ]), and real-time **deliberation highway spotlights**.
 
 ---
 
 ## Quick Navigation
 * [Web Portal Showcase](https://vibecoderanon.github.io/#flybrain-nx)
+* [Viral Drosophila Connectome Features (Stonkfly / Doomfly Inspired)](#viral-drosophila-connectome-features)
 * [Neuromorphic Constraint Satisfaction (SNN-CSP)](#neuromorphic-constraint-satisfaction-snn-csp)
+* [Strict Physical-First Causality (4-Stage Thought Cycle)](#strict-physical-first-causality-4-stage-thought-cycle)
 * [Split-Screen Interface & Embodied Fly](#split-screen-interface--embodied-fly)
-* [Game Modes & Joy-Con Controls](#game-modes--joy-con-controls)
+* [Game Modes & Multi-Pacing Selector](#game-modes--multi-pacing-selector)
 * [Built-in Puzzle Catalog](#built-in-puzzle-catalog)
 * [Memory Schema & Hardware Budget](#memory-schema--hardware-budget)
 * [Architecture & File Responsibilities](#architecture--file-responsibilities)
 * [Building & Console Deployment](#building--console-deployment)
 * [Title Override Invariant (Firmware 22.5.0+)](#title-override-invariant-firmware-2250)
 * [Credits & Scientific Acknowledgments](#credits--scientific-acknowledgments)
+
+---
+
+## Viral Drosophila Connectome Features
+
+Following the release of the complete adult fruit fly connectome (*FlyWire 2024*), creative developers built viral projects mapping simulated fly brains to DOOM (**Doomfly**), Bitcoin trading charts (**Stonkfly**), and autonomous vehicles (**flyhard**). `flybrain-nx` incorporates their visual feedback loops to make biological neural dynamics instantly legible:
+
+1. **Dual Spectator Gauges (Top of 3D Brain Viewport):**
+   * **`[🍬 PAM11 REWARD]` (Emerald Green):** Spikes radiant emerald (+3.5 mV) whenever a row/column clue is satisfied or puzzle progress advances.
+   * **`[⚡ PPL101 AVERSIVE]` (Crimson Red):** Flashes vivid red when the fly encounters a constraint contradiction.
+   * **`[👁️ OPTIC SCAN]` (Cyan):** Illuminates while the fly's compound eyes read row/column clue numbers.
+   * **`[🧭 COMPASS (CX)]` (Gold):** Illuminates while the Central Complex computes directional steering.
+
+2. **Live Thought Monologue Banner (Top of Picross Viewport):**
+   * Real-time narration capsule displaying the fly's observations, hypotheses, and physical actuation decisions (e.g. *"Sensory Scan: Inspecting Row 2 constraints..."*, *"Actuation: Proboscis inking tile (2, 3)! (+PAM11)"*).
+
+3. **Sensory Scan Reticle & Clue Laser Highlighting:**
+   * An amber laser targeting beam connects the fly's eyes to the exact row/column clues and grid line currently being scrutinized.
+
+4. **3D Anatomical Neuropil Badges & Deliberation Highway:**
+   * Floating 3D labels identify `[OPTIC LOBES]`, `[MUSHROOM BODY]`, `[CENTRAL COMPLEX]`, and `[MOTOR SEZ]`.
+   * Active lobes spotlight in high contrast as signals flow from sensory ingestion to motor actuation.
+
+---
+
+## Strict Physical-First Causality (4-Stage Thought Cycle)
+
+Tiles and clues **never mutate prematurely**. Board state changes occur strictly on physical proboscis contact:
+
+```
++-------------------------------------------------------------------------------+
+|                       THE 4-STAGE BIOLOGICAL THOUGHT CYCLE                    |
++-------------------------------------------------------------------------------+
+| STAGE 1: VISUAL SENSORY SCAN (~0.5s)                                          |
+|   - Fly turns toward target line. Active clues illuminate with amber reticle.  |
+|   - [OPTIC SCAN] gauge fills with cyan. Optic lobes spotlight in 3D brain.     |
+|   - Thought: "👀 Sensory Scan: Inspecting Row 2 constraints..."               |
+|                                                                               |
+| STAGE 2: HEADING & NAVIGATION (Natural crawl)                                 |
+|   - Central Complex compass neurons fire. [COMPASS CX] gauge fills with gold. |
+|   - Fly crawls across grid using 6-legged tripod gait. Target cell stays blank.|
+|   - Thought: "🚶 Navigation (CX): Crawling toward tile (2, 3)..."              |
+|                                                                               |
+| STAGE 3: INSPECTION & DELIBERATION (~0.4s)                                    |
+|   - Fly halts at tile; antennae and body twitch.                              |
+|   - Mushroom Body (Kenyon cells) spotlight in 3D brain.                       |
+|   - Thought: "🧠 Deliberation (MB): Verifying overlap at (2, 3)..."            |
+|                                                                               |
+| STAGE 4: SYNCHRONIZED ACTUATION & DOPAMINE SURGE (~0.35s)                     |
+|   - Proboscis extends down to paper.                                          |
+|   - ON THE EXACT FRAME OF CONTACT:                                            |
+|     * Ink droplet expands and fills the tile (or front legs scratch 'X').     |
+|     * [PAM11 REWARD] gauge surges emerald green!                              |
+|     * Clues strike through if line constraints are satisfied!                 |
+|   - Thought: "🎯 Actuation: Proboscis inking tile (2, 3)! (+PAM11)"            |
++-------------------------------------------------------------------------------+
+```
 
 ---
 
@@ -66,38 +125,38 @@ The native 1280×720 Nintendo Switch framebuffer is divided into two balanced 64
 +-----------------------------------+-----------------------------------+
 | LEFT PANEL (640x720): PICROSS     | RIGHT PANEL (640x720): 3D BRAIN   |
 |                                   |                                   |
-| PUZZLE 1/8: FRUIT FLY [5x5]       |          .  : *  .                |
-| [AUTOPILOT: FLY SOLVING]          |        :  *   /|   .              |
-|                                   |       .  --*---*-- .   <-- Axon   |
-|        1   2   4   2   1          |        :  /|   | *     Beams      |
-|      +---+---+---+---+---+        |          * |   *                  |
-|  1 1 | . | # | . | # | . |        |         /  * .  \                 |
-|    5 | # | # | # | # | # |        |        *     *   *                |
-|    1 | . | . | # | . | . |  <-Fly |      [Spotlight Focus Neuron]     |
-|    3 | . | # | # | # | . |        |     (Glows gold on active cell)   |
-|    1 | . | . | # | . | . |        |                                   |
-|      +---+---+---+---+---+        |                                   |
+| PUZZLE 1/8: FRUIT FLY [5x5]       | [SPECTATOR GAUGES] [OBSERVE 2.2s] |
+| [THOUGHT: Crawling to tile (2,3)] | [PAM11: ████████] [PPL101: ░░░░]  |
+|                                   | [OPTIC: ██████░░] [CX:     ████░] |
+|        1   2   4   2   1          |                                   |
+|      +---+---+---+---+---+        |       [OPTIC LOBE]  .  : *        |
+|  1 1 | . | # | . | # | . |        |        :  *   /|   .              |
+|    5 | # | # | # | # | # |        |       .  --*---*-- .   <-- Axon   |
+|  1 > | . | . | # | . | . |  <-Fly |        :  /|   | *     Beams      |
+|    3 | . | # | # | # | . |        |     [MUSHROOM BODY]               |
+|    1 | . | . | # | . | . |        |         /  * .  \                 |
+|      +---+---+---+---+---+        |        *     *   * [MOTOR SEZ]    |
+|      [Laser Clue Highlight]       |                                   |
 +-----------------------------------+-----------------------------------+
 | BOTTOM BAR: SIM 1,000 Hz | SPIKES 24.5k/s | RENDER 60 FPS | AXONS ON  |
-| CONTROLS: [D-Pad] Move [A] Fill [B] Cross [X] Autopilot [Y] Axons (+)Exit |
+| CONTROLS: [D-Pad] Move [A] Mark/Step [B] Cross [X] Mode [Y] Axons (+) |
 +-----------------------------------------------------------------------+
 ```
 
-### Embodied Fruit Fly Avatar Kinematics
-* **Tripod Gait Kinematics:** Smoothly crawls across tiles $(r, c)$ at 260 px/sec.
-* **Inking Animation:** Extends proboscis to ink cells with obsidian ink droplets.
-* **Scratching Animation:** Scratches front legs to carve red 'X' marks.
-* **Victory Celebration:** Performs a 360° victory spin and high-frequency wing buzz upon completing the puzzle!
-
 ---
 
-## Game Modes & Joy-Con Controls
+## Game Modes & Multi-Pacing Selector
 
-### 1. Autopilot Mode (Fly Solves)
-Sit back and watch the biological connectome deduce, walk across, and solve Nonograms step-by-step using genuine spiking neural dynamics. Press **(A)** at any time to step the solver forward immediately.
+Press **(X)** to cycle between 4 distinct cognitive pacing modes:
 
-### 2. Manual Play Mode (Player Solves)
-Take direct control with your Joy-Con controller! Play Picross traditionally with the D-Pad and action buttons while observing real-time brain reactions, dopamine reward flashes, and axon transmission lines in the right viewport.
+1. **Observational Mode (Default, ~2.2s per move):**
+   * Calibrated for spectator enjoyment: watch the fly scan the clues, walk across the tiles, deliberate, and extend its proboscis with synchronized dopamine bursts.
+2. **Fast Mode (~0.9s per move):**
+   * Rapid solving with preserved physical contact synchronization and high-speed crawling.
+3. **Step-by-Step Mode (Manual `[A]`):**
+   * Deliberation halts at each step. Press **(A)** to command the connectome to advance to the next deduction, letting you inspect the exact firing circuits at leisure.
+4. **Manual Play Mode (Direct Joy-Con Play):**
+   * Play Picross traditionally with the D-Pad and action buttons while observing real-time brain reactions, dopamine reward flashes, and axon transmission lines.
 
 ```
                            [ L / R: Switch Puzzles ]
@@ -108,9 +167,9 @@ Take direct control with your Joy-Con controller! Play Picross traditionally wit
          Navigate Grid Tiles                    Orbit 3D Brain Camera
                    |                                       |
                    |                                       |
-         [ (A) Button ]  Fill Tile (Manual) / Step Fly Solver (Autopilot)
+         [ (A) Button ]  Mark Tile (Manual) / Advance Step (Step Mode)
          [ (B) Button ]  Cross Tile ('X')
-         [ (X) Button ]  Toggle Autopilot Mode (Fly Solves vs. Manual Play)
+         [ (X) Button ]  Cycle Mode: Observe -> Fast -> Step -> Manual
          [ (Y) Button ]  Toggle 3D Axon Transmission Lines (ON / OFF)
          [ (+) Button ]  Exit to Horizon OS HOME Menu
 ```
@@ -231,7 +290,7 @@ flybrain-nx/
    ```
 
 ### SD Card Deployment
-1. Extract `release/flybrain-nx-switch-v1.1.0.zip` to the root of your SD card:
+1. Extract `release/flybrain-nx-switch-v1.2.0.zip` to the root of your SD card:
    ```
    sdmc:/
    └── switch/

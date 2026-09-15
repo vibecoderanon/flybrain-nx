@@ -318,8 +318,14 @@ bool PicrossBoard::deduceLine(const std::vector<CellState>& current_line,
 }
 
 bool PicrossBoard::findNextDeduction(int& out_r, int& out_c, CellState& out_state) const {
+    int dummy_type = -1, dummy_idx = -1;
+    return findNextDeductionEx(out_r, out_c, out_state, dummy_type, dummy_idx);
+}
+
+bool PicrossBoard::findNextDeductionEx(int& out_r, int& out_c, CellState& out_state, int& out_scan_type, int& out_scan_idx) const {
     // 1. Check rows
     for (int r = 0; r < m_height; ++r) {
+        if (isRowSatisfied(r)) continue;
         std::vector<CellState> cur_row(m_width);
         for (int c = 0; c < m_width; ++c) cur_row[c] = getCell(r, c);
 
@@ -330,6 +336,8 @@ bool PicrossBoard::findNextDeduction(int& out_r, int& out_c, CellState& out_stat
                     out_r = r;
                     out_c = c;
                     out_state = deduced[c];
+                    out_scan_type = 0; // Row
+                    out_scan_idx = r;
                     return true;
                 }
             }
@@ -338,6 +346,7 @@ bool PicrossBoard::findNextDeduction(int& out_r, int& out_c, CellState& out_stat
 
     // 2. Check columns
     for (int c = 0; c < m_width; ++c) {
+        if (isColSatisfied(c)) continue;
         std::vector<CellState> cur_col(m_height);
         for (int r = 0; r < m_height; ++r) cur_col[r] = getCell(r, c);
 
@@ -348,6 +357,8 @@ bool PicrossBoard::findNextDeduction(int& out_r, int& out_c, CellState& out_stat
                     out_r = r;
                     out_c = c;
                     out_state = deduced[r];
+                    out_scan_type = 1; // Col
+                    out_scan_idx = c;
                     return true;
                 }
             }
@@ -362,12 +373,16 @@ bool PicrossBoard::findNextDeduction(int& out_r, int& out_c, CellState& out_stat
                     out_r = r;
                     out_c = c;
                     out_state = m_solution[r * m_width + c];
+                    out_scan_type = 0;
+                    out_scan_idx = r;
                     return true;
                 }
             }
         }
     }
 
+    out_scan_type = -1;
+    out_scan_idx = -1;
     return false;
 }
 

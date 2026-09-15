@@ -73,6 +73,14 @@ int main(int argc, char* argv[]) {
     arena.init();
 
     // 4. Setup Picross Puzzle State
+    enum class PacingMode : uint8_t {
+        Observational = 0, // Default (~2.2s biological thought cycle)
+        Fast          = 1, // Rapid (~0.9s cycle)
+        StepByStep    = 2, // Pauses at each step; press [A] to advance
+        Manual        = 3  // Direct Joy-Con control
+    };
+    PacingMode pacing_mode = PacingMode::Observational;
+
     size_t current_puzzle_idx = 0;
     size_t total_puzzles = flybrain::PuzzleLibrary::getPuzzleCount();
     flybrain::PuzzleDef puzzle = flybrain::PuzzleLibrary::getPuzzle(current_puzzle_idx);
@@ -82,19 +90,17 @@ int main(int argc, char* argv[]) {
 
     int cursor_r = 0;
     int cursor_c = 0;
-    bool is_autopilot = true; // Fly Brain Autopilot active by default!
-    float autopilot_timer = 0.0f;
     float solve_timer = 0.0f;
 
     auto resetPuzzleState = [&](size_t idx) {
         current_puzzle_idx = idx % total_puzzles;
         puzzle = flybrain::PuzzleLibrary::getPuzzle(current_puzzle_idx);
         board = puzzle.createBoard();
+        board.setActiveScan(-1, -1);
         engine.bindPicrossBoard(&board);
         cursor_r = 0;
         cursor_c = 0;
         solve_timer = 0.0f;
-        autopilot_timer = 0.0f;
 
         float ox, oy;
         picross_view.getGridOrigin(board.getWidth(), board.getHeight(), ox, oy);
@@ -150,17 +156,24 @@ int main(int argc, char* argv[]) {
             resetPuzzleState(current_puzzle_idx + 1);
         }
 
-        // Autopilot Toggle
+        // Pacing & Game Mode Cycling (Observational -> Fast -> StepByStep -> Manual)
         if (actions.toggle_autopilot) {
-            is_autopilot = !is_autopilot;
+            pacing_mode = static_cast<PacingMode>((static_cast<uint8_t>(pacing_mode) + 1) % 4);
         }
 
         float tile_size = picross_view.getTileSize(board.getWidth(), board.getHeight());
         float ox, oy;
         picross_view.getGridOrigin(board.getWidth(), board.getHeight(), ox, oy);
 
-        // B. Game Input Handling
-        if (!is_autopilot) {
+        float speed_mult = 1.0f;
+        if (pacing_mode == PacingMode::Fast) {
+            speed_mult = 2.4f;
+        } else if (pacing_mode == PacingMode::StepByStep) {
+            speed_mult = 1.2f;
+        }
+
+        // B. Game Input Handling & Thought Cycle Deliberation
+        if (pacing_mode == PacingMode::Manual) {
             // Manual Player Control
             if (actions.move_up && cursor_r > 0) cursor_r--;
             if (actions.move_down && cursor_r < board.getHeight() - 1) cursor_r++;
@@ -170,45 +183,75 @@ int main(int argc, char* argv[]) {
             if (actions.action_fill) {
                 board.toggleFill(cursor_r, cursor_c);
                 arena.commandMove(cursor_r, cursor_c, flybrain::CellState::Filled, tile_size, ox, oy);
-                engine.updatePicrossSensoryFeedback();
+                engine.commitDeduction(cursor_r, cursor_c, flybrain::CellState::Filled);
                 if (board.isSolved()) arena.triggerVictory();
             } else if (actions.action_cross) {
                 board.toggleCross(cursor_r, cursor_c);
                 arena.commandMove(cursor_r, cursor_c, flybrain::CellState::Crossed, tile_size, ox, oy);
-                engine.updatePicrossSensoryFeedback();
+                engine.commitDeduction(cursor_r, cursor_c, flybrain::CellState::Crossed);
                 if (board.isSolved()) arena.triggerVictory();
             }
         } else {
-            // Autonomous Fly Solver Mode
-            autopilot_timer += dt;
-            bool force_step = actions.action_fill; // Press A to immediately step fly solver
+            // Autonomous Fly Deliberation Modes (Observational, Fast, StepByStep)
+            if (arena.getFly().state == flybrain::FlyActionState::Idle && !board.isSolved()) {
+                bool trigger_deduction = true;
+                if (pacing_mode == PacingMode::StepByStep) {
+                    // In Step mode, press [A] to trigger next deduction
+                    trigger_deduction = actions.action_fill;
+                }
 
-            if ((autopilot_timer >= 0.45f || force_step) && !board.isSolved()) {
-                int out_r = 0, out_c = 0;
-                flybrain::CellState out_action = flybrain::CellState::Unknown;
-                if (engine.stepPicrossSolver(out_r, out_c, out_action)) {
-                    cursor_r = out_r;
-                    cursor_c = out_c;
-                    arena.commandMove(out_r, out_c, out_action, tile_size, ox, oy);
-                    autopilot_timer = 0.0f;
-                    if (board.isSolved()) {
-                        arena.triggerVictory();
+                if (trigger_deduction) {
+                    int out_r = -1, out_c = -1, scan_type = -1, scan_idx = -1;
+                    flybrain::CellState out_action = flybrain::CellState::Unknown;
+                    if (engine.prepareNextDeduction(out_r, out_c, out_action, scan_type, scan_idx)) {
+                        cursor_r = out_r;
+                        cursor_c = out_c;
+                        board.setActiveScan(scan_type, scan_idx);
+                        arena.startDeliberation(out_r, out_c, out_action, scan_type, scan_idx, board, tile_size, ox, oy, speed_mult);
+                    } else {
+                        board.setActiveScan(-1, -1);
                     }
                 }
             }
         }
 
-        // C. Step Leaky Integrate-and-Fire Simulation
+        // C. Physical-First Board Mutation (Mutates on exact frame proboscis touches paper)
+        if (arena.hasContactTriggered()) {
+            arena.clearContactTriggered();
+            const auto& fly = arena.getFly();
+            if (fly.target_r >= 0 && fly.target_c >= 0 && fly.pending_action != flybrain::CellState::Unknown) {
+                engine.commitDeduction(fly.target_r, fly.target_c, fly.pending_action);
+                board.setActiveScan(-1, -1);
+                engine.setOpticScanActive(false);
+                if (board.isSolved()) {
+                    arena.triggerVictory();
+                }
+            }
+        }
+
+        // D. Step Leaky Integrate-and-Fire Simulation & Decay Spectator Meters
         int steps_per_frame = 4;
         for (int step_idx = 0; step_idx < steps_per_frame; ++step_idx) {
             engine.step(1.0f);
         }
+        engine.updateMeters(dt);
 
-        // D. Update Embodied Fly Kinematics on Grid
-        arena.update(engine, dt, tile_size, ox, oy);
+        // E. Update Embodied Fly Kinematics on Grid
+        arena.update(engine, dt, tile_size, ox, oy, speed_mult);
 
-        // E. Render Split-Screen Viewports & Bottom HUD
+        // F. Determine Active Cognitive Stage for 3D Brain Spotlight
+        int cognitive_phase = 0;
+        auto fly_state = arena.getFly().state;
+        if (fly_state == flybrain::FlyActionState::ScanningLine) cognitive_phase = 1;
+        else if (fly_state == flybrain::FlyActionState::Walking) cognitive_phase = 2;
+        else if (fly_state == flybrain::FlyActionState::Inspecting) cognitive_phase = 3;
+        else if (fly_state == flybrain::FlyActionState::Actuating) cognitive_phase = 4;
+
+        // G. Render Split-Screen Viewports, Spectator Gauges, and Bottom HUD
         bool lines_on = renderer.areAxonLinesEnabled();
+        bool is_autopilot = (pacing_mode != PacingMode::Manual);
+        int pace_int = static_cast<int>(pacing_mode);
+
 #ifdef __SWITCH__
         u32 stride = 0;
         uint32_t* fb_ptr = reinterpret_cast<uint32_t*>(framebufferBegin(&fb, &stride));
@@ -218,7 +261,10 @@ int main(int argc, char* argv[]) {
                                 cursor_r, cursor_c, is_autopilot, arena, solve_timer);
 
             // Right Panel (640, 0, 640, 680): 3D Connectome Visualizer & Axon Lines
-            renderer.renderSoftware(fb_ptr, 1280, 720, engine, 640, 0, 640, 680);
+            renderer.renderSoftware(fb_ptr, 1280, 720, engine, 640, 0, 640, 680, cognitive_phase);
+
+            // Top Right Spectator Gauges (648, 8, 620, 58): Stonkfly / Doomfly Inspired
+            hud.renderSpectatorGauges(fb_ptr, 1280, 720, engine, pace_int);
 
             // Bottom Bar (0, 680, 1280, 40): Telemetry & Controller Legend
             hud.render(fb_ptr, 1280, 720, engine, fps, lines_on);
@@ -228,7 +274,8 @@ int main(int argc, char* argv[]) {
 #else
         picross_view.render(host_fb.data(), 1280, 720, board, puzzle.title, puzzle.category,
                             cursor_r, cursor_c, is_autopilot, arena, solve_timer);
-        renderer.renderSoftware(host_fb.data(), 1280, 720, engine, 640, 0, 640, 680);
+        renderer.renderSoftware(host_fb.data(), 1280, 720, engine, 640, 0, 640, 680, cognitive_phase);
+        hud.renderSpectatorGauges(host_fb.data(), 1280, 720, engine, pace_int);
         hud.render(host_fb.data(), 1280, 720, engine, fps, lines_on);
 #endif
     }

@@ -143,35 +143,115 @@ void LIFEngine::updatePicrossSensoryFeedback() {
     }
 }
 
-bool LIFEngine::stepPicrossSolver(int& out_r, int& out_c, CellState& out_action) {
+bool LIFEngine::prepareNextDeduction(int& out_r, int& out_c, CellState& out_action, int& out_scan_type, int& out_scan_idx) {
     if (!m_picrossBoard || m_picrossBoard->isSolved()) return false;
 
     updatePicrossSensoryFeedback();
 
-    // Find next deterministic/probabilistic deduction from attractor state
-    if (m_picrossBoard->findNextDeduction(out_r, out_c, out_action)) {
-        int w = m_picrossBoard->getWidth();
-        uint32_t cluster_idx = (out_r * w + out_c) % m_tileNeuronClusters.size();
-        m_picrossFocusNeuron = m_tileNeuronClusters[cluster_idx];
-
-        // Trigger action potential in target coordinate neuron
-        injectCurrent(m_picrossFocusNeuron, 35.0f);
-
-        // Motor branch:
-        if (out_action == CellState::Filled) {
-            // Proboscis extension / SEZ feeding motor burst
-            injectTaste(true, 1.2f);
-        } else {
-            // Grooming / leg scratching motor burst
-            injectTaste(false, 0.8f);
+    if (m_picrossBoard->findNextDeductionEx(out_r, out_c, out_action, out_scan_type, out_scan_idx)) {
+        if (!m_tileNeuronClusters.empty()) {
+            int w = m_picrossBoard->getWidth();
+            uint32_t cluster_idx = (out_r * w + out_c) % m_tileNeuronClusters.size();
+            m_picrossFocusNeuron = m_tileNeuronClusters[cluster_idx];
+            injectCurrent(m_picrossFocusNeuron, 15.0f);
         }
-
-        // Apply deduction to board
-        m_picrossBoard->setCell(out_r, out_c, out_action);
         return true;
     }
-
     return false;
+}
+
+void LIFEngine::commitDeduction(int r, int c, CellState action) {
+    if (!m_picrossBoard) return;
+
+    m_picrossBoard->setCell(r, c, action);
+
+    if (!m_tileNeuronClusters.empty()) {
+        int w = m_picrossBoard->getWidth();
+        uint32_t cluster_idx = (r * w + c) % m_tileNeuronClusters.size();
+        m_picrossFocusNeuron = m_tileNeuronClusters[cluster_idx];
+        injectCurrent(m_picrossFocusNeuron, 45.0f);
+    }
+
+    if (action == CellState::Filled) {
+        injectTaste(true, 1.8f);
+    } else {
+        injectTaste(false, 0.9f);
+    }
+
+    bool row_sat = m_picrossBoard->isRowSatisfied(r);
+    bool col_sat = m_picrossBoard->isColSatisfied(c);
+    bool row_contra = m_picrossBoard->isRowContradiction(r);
+    bool col_contra = m_picrossBoard->isColContradiction(c);
+
+    if (row_contra || col_contra) {
+        triggerAversiveSpike(1.0f);
+    } else if (row_sat || col_sat) {
+        triggerDopamineSpike(1.0f);
+    } else {
+        triggerDopamineSpike(0.45f);
+    }
+
+    updatePicrossSensoryFeedback();
+}
+
+bool LIFEngine::stepPicrossSolver(int& out_r, int& out_c, CellState& out_action) {
+    int scan_type = -1, scan_idx = -1;
+    if (prepareNextDeduction(out_r, out_c, out_action, scan_type, scan_idx)) {
+        commitDeduction(out_r, out_c, out_action);
+        return true;
+    }
+    return false;
+}
+
+void LIFEngine::triggerDopamineSpike(float amount) {
+    m_dopaminePAM11 = std::min(1.0f, m_dopaminePAM11 + amount);
+    if (m_numNeurons > 0 && m_neurons) {
+        for (uint32_t i = 0; i < m_numNeurons; ++i) {
+            if (m_neurons[i].neuropil_id == static_cast<uint8_t>(NeuropilID::MushroomBody)) {
+                injectCurrent(i, 8.0f * amount);
+            }
+        }
+    }
+}
+
+void LIFEngine::triggerAversiveSpike(float amount) {
+    m_aversivePPL101 = std::min(1.0f, m_aversivePPL101 + amount);
+    if (m_numNeurons > 0 && m_neurons) {
+        for (uint32_t i = 0; i < m_numNeurons; ++i) {
+            if (m_neurons[i].neuropil_id == static_cast<uint8_t>(NeuropilID::AntennalLobe)) {
+                injectCurrent(i, 12.0f * amount);
+            }
+        }
+    }
+}
+
+void LIFEngine::setOpticScanActive(bool active) {
+    m_opticScanLevel = active ? 1.0f : 0.0f;
+    if (active && m_numNeurons > 0 && m_neurons) {
+        for (uint32_t i = 0; i < m_numNeurons; i += 7) {
+            if (m_neurons[i].neuropil_id == static_cast<uint8_t>(NeuropilID::OpticLobe)) {
+                injectCurrent(i, 6.0f);
+            }
+        }
+    }
+}
+
+void LIFEngine::setCompassActive(bool active) {
+    m_compassCXLevel = active ? 1.0f : 0.0f;
+    if (active && m_numNeurons > 0 && m_neurons) {
+        for (uint32_t i = 0; i < m_numNeurons; i += 5) {
+            if (m_neurons[i].neuropil_id == static_cast<uint8_t>(NeuropilID::CentralComplex)) {
+                injectCurrent(i, 6.0f);
+            }
+        }
+    }
+}
+
+void LIFEngine::updateMeters(float dt_sec) {
+    m_dopaminePAM11 = std::max(0.0f, m_dopaminePAM11 - dt_sec * 0.90f);
+    m_aversivePPL101 = std::max(0.0f, m_aversivePPL101 - dt_sec * 1.20f);
+    m_opticScanLevel = std::max(0.0f, m_opticScanLevel - dt_sec * 1.50f);
+    m_compassCXLevel = std::max(0.0f, m_compassCXLevel - dt_sec * 1.50f);
 }
 
 void LIFEngine::step(float dt_ms) {
