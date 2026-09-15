@@ -27,6 +27,10 @@ struct NeuropilCentroid {
     uint32_t color;
     bool is_left_optic = false;
     bool is_right_optic = false;
+
+    NeuropilCentroid() = default;
+    NeuropilCentroid(NeuropilID id_, const char* name_, float x_, float y_, float z_, uint32_t color_, bool is_left_ = false, bool is_right_ = false)
+        : id(id_), name(name_), x(x_), y(y_), z(z_), color(color_), is_left_optic(is_left_), is_right_optic(is_right_) {}
 };
 
 class BrainRenderer {

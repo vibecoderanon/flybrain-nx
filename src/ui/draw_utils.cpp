@@ -213,4 +213,40 @@ void DrawUtils::drawCircleFilled(uint32_t* fb, int fb_w, int fb_h, int cx, int c
     }
 }
 
+void DrawUtils::drawCircleOutline(uint32_t* fb, int fb_w, int fb_h, int cx, int cy, int radius, uint32_t color) {
+    if (radius <= 0) {
+        if (cx >= 0 && cx < fb_w && cy >= 0 && cy < fb_h) fb[cy * fb_w + cx] = color;
+        return;
+    }
+    int x = radius;
+    int y = 0;
+    int err = 0;
+
+    auto setPixel = [&](int px, int py) {
+        if (px >= 0 && px < fb_w && py >= 0 && py < fb_h) {
+            fb[py * fb_w + px] = color;
+        }
+    };
+
+    while (x >= y) {
+        setPixel(cx + x, cy + y);
+        setPixel(cx + y, cy + x);
+        setPixel(cx - y, cy + x);
+        setPixel(cx - x, cy + y);
+        setPixel(cx - x, cy - y);
+        setPixel(cx - y, cy - x);
+        setPixel(cx + y, cy - x);
+        setPixel(cx + x, cy - y);
+
+        if (err <= 0) {
+            y += 1;
+            err += 2 * y + 1;
+        }
+        if (err > 0) {
+            x -= 1;
+            err -= 2 * x + 1;
+        }
+    }
+}
+
 } // namespace flybrain

@@ -3,8 +3,18 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <array>
 
 namespace flybrain {
+
+namespace {
+struct NeuropilAcc {
+    float sum_x = 0.0f;
+    float sum_y = 0.0f;
+    float sum_z = 0.0f;
+    uint32_t count = 0;
+};
+}
 
 BrainRenderer::BrainRenderer() = default;
 BrainRenderer::~BrainRenderer() = default;
@@ -49,9 +59,9 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
     m_vertices.resize(count);
     m_projectedPoints.resize(count);
 
-    Acc acc[9]{};
-    Acc acc_optic_left{};
-    Acc acc_optic_right{};
+    std::array<NeuropilAcc, 9> acc{};
+    NeuropilAcc acc_optic_left{};
+    NeuropilAcc acc_optic_right{};
 
     for (uint32_t i = 0; i < count; ++i) {
         BrainVertex& v = m_vertices[i];
@@ -89,18 +99,18 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
     // 1. Bilateral Optic Lobes (physically separated on X axis, preventing (0,0,0) centroid collision)
     if (acc_optic_left.count > 0) {
         float inv = 1.0f / static_cast<float>(acc_optic_left.count);
-        m_centroids.push_back({NeuropilID::OpticLobe, "L. OPTIC LOBE", acc_optic_left.sum_x * inv, acc_optic_left.sum_y * inv, acc_optic_left.sum_z * inv, 0xFF06B6D4, true, false});
+        m_centroids.emplace_back(NeuropilID::OpticLobe, "L. OPTIC LOBE", acc_optic_left.sum_x * inv, acc_optic_left.sum_y * inv, acc_optic_left.sum_z * inv, 0xFF06B6D4, true, false);
     }
     if (acc_optic_right.count > 0) {
         float inv = 1.0f / static_cast<float>(acc_optic_right.count);
-        m_centroids.push_back({NeuropilID::OpticLobe, "R. OPTIC LOBE", acc_optic_right.sum_x * inv, acc_optic_right.sum_y * inv, acc_optic_right.sum_z * inv, 0xFF06B6D4, false, true});
+        m_centroids.emplace_back(NeuropilID::OpticLobe, "R. OPTIC LOBE", acc_optic_right.sum_x * inv, acc_optic_right.sum_y * inv, acc_optic_right.sum_z * inv, 0xFF06B6D4, false, true);
     }
 
     auto addCentroid = [&](NeuropilID id, const char* name, uint32_t col) {
         uint8_t nid = static_cast<uint8_t>(id);
         if (nid < 9 && acc[nid].count > 0) {
             float inv = 1.0f / static_cast<float>(acc[nid].count);
-            m_centroids.push_back({id, name, acc[nid].sum_x * inv, acc[nid].sum_y * inv, acc[nid].sum_z * inv, col, false, false});
+            m_centroids.emplace_back(id, name, acc[nid].sum_x * inv, acc[nid].sum_y * inv, acc[nid].sum_z * inv, col, false, false);
         }
     };
 
