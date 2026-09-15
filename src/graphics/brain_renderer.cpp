@@ -49,8 +49,9 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
     m_vertices.resize(count);
     m_projectedPoints.resize(count);
 
-    struct Acc { float sum_x = 0; float sum_y = 0; float sum_z = 0; uint32_t count = 0; };
     Acc acc[9]{};
+    Acc acc_optic_left{};
+    Acc acc_optic_right{};
 
     for (uint32_t i = 0; i < count; ++i) {
         BrainVertex& v = m_vertices[i];
@@ -62,6 +63,19 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
         getNeuropilColor(static_cast<NeuropilID>(neurons[i].neuropil_id), v.r, v.g, v.b);
 
         uint8_t nid = neurons[i].neuropil_id;
+        if (nid == static_cast<uint8_t>(NeuropilID::OpticLobe)) {
+            if (neurons[i].x < 0.0f) {
+                acc_optic_left.sum_x += neurons[i].x;
+                acc_optic_left.sum_y += neurons[i].y;
+                acc_optic_left.sum_z += neurons[i].z;
+                acc_optic_left.count++;
+            } else {
+                acc_optic_right.sum_x += neurons[i].x;
+                acc_optic_right.sum_y += neurons[i].y;
+                acc_optic_right.sum_z += neurons[i].z;
+                acc_optic_right.count++;
+            }
+        }
         if (nid < 9) {
             acc[nid].sum_x += neurons[i].x;
             acc[nid].sum_y += neurons[i].y;
@@ -71,18 +85,28 @@ bool BrainRenderer::init(const ConnectomeLoader& loader, int screen_width, int s
     }
 
     m_centroids.clear();
+
+    // 1. Bilateral Optic Lobes (physically separated on X axis, preventing (0,0,0) centroid collision)
+    if (acc_optic_left.count > 0) {
+        float inv = 1.0f / static_cast<float>(acc_optic_left.count);
+        m_centroids.push_back({NeuropilID::OpticLobe, "L. OPTIC LOBE", acc_optic_left.sum_x * inv, acc_optic_left.sum_y * inv, acc_optic_left.sum_z * inv, 0xFF06B6D4, true, false});
+    }
+    if (acc_optic_right.count > 0) {
+        float inv = 1.0f / static_cast<float>(acc_optic_right.count);
+        m_centroids.push_back({NeuropilID::OpticLobe, "R. OPTIC LOBE", acc_optic_right.sum_x * inv, acc_optic_right.sum_y * inv, acc_optic_right.sum_z * inv, 0xFF06B6D4, false, true});
+    }
+
     auto addCentroid = [&](NeuropilID id, const char* name, uint32_t col) {
         uint8_t nid = static_cast<uint8_t>(id);
         if (nid < 9 && acc[nid].count > 0) {
             float inv = 1.0f / static_cast<float>(acc[nid].count);
-            m_centroids.push_back({id, name, acc[nid].sum_x * inv, acc[nid].sum_y * inv, acc[nid].sum_z * inv, col});
+            m_centroids.push_back({id, name, acc[nid].sum_x * inv, acc[nid].sum_y * inv, acc[nid].sum_z * inv, col, false, false});
         }
     };
 
-    addCentroid(NeuropilID::OpticLobe, "[OPTIC LOBES]", 0xFF06B6D4);
-    addCentroid(NeuropilID::CentralComplex, "[CENTRAL COMPLEX]", 0xFFF59E0B);
-    addCentroid(NeuropilID::MushroomBody, "[MUSHROOM BODY]", 0xFFF43F5E);
-    addCentroid(NeuropilID::SubesophagealZone, "[MOTOR SEZ]", 0xFFF97316);
+    addCentroid(NeuropilID::CentralComplex, "CENTRAL COMPLEX", 0xFFF59E0B);
+    addCentroid(NeuropilID::MushroomBody, "MUSHROOM BODY", 0xFFF43F5E);
+    addCentroid(NeuropilID::SubesophagealZone, "MOTOR SEZ", 0xFFF97316);
 
     resetCamera();
     return true;
@@ -146,14 +170,16 @@ void BrainRenderer::drawLineBlended(uint32_t* fb, int stride, int height, int x0
 
 void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height, const LIFEngine& engine,
                                    int vp_x, int vp_y, int vp_w, int vp_h,
-                                   int cognitive_phase) {
+                                   int cognitive_phase, float anim_time,
+                                   int target_r, int target_c) {
     if (!framebuffer || m_vertices.empty() || stride <= 0 || height <= 0 || vp_w <= 0 || vp_h <= 0) return;
 
+    m_animTime = anim_time;
     int max_x = std::min(stride, vp_x + vp_w);
     int max_y = std::min(height, vp_y + vp_h);
 
-    // Clear background of this viewport to obsidian navy (#0b0f19)
-    const uint32_t bg_color = 0xFF0B0F19;
+    // 1. Clear background of this viewport to obsidian navy (#0a0e17)
+    const uint32_t bg_color = 0xFF0A0E17;
     for (int y = vp_y; y < max_y; ++y) {
         std::fill_n(&framebuffer[y * stride + vp_x], max_x - vp_x, bg_color);
     }
@@ -171,7 +197,7 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
     const uint32_t neuron_count = engine.getNeuronCount();
     const uint32_t focus_neuron = engine.getPicrossFocusNeuron();
 
-    // 1. Perspective Project all neurons to screen space & cache
+    // 2. Perspective Project all neurons to screen space & cache
     for (size_t i = 0; i < m_vertices.size(); ++i) {
         const auto& v = m_vertices[i];
         ProjectedPoint& pt = m_projectedPoints[i];
@@ -206,7 +232,7 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
         pt.valid = true;
     }
 
-    // 2. Render Active Synaptic Transmission Beams / Lines
+    // 3. Render Active Synaptic Conduits & Traveling Energy Packets
     if (m_showAxonLines) {
         const auto& lines = engine.getActiveLines();
         for (const auto& l : lines) {
@@ -220,18 +246,43 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
             float lr, lg, lb;
             getNeuropilColor(static_cast<NeuropilID>(l.neuropil_id), lr, lg, lb);
 
-            // Lines pulse with bright core, scaled by line life intensity
-            float alpha = std::clamp(l.intensity * 0.70f, 0.05f, 0.95f);
+            // Baseline axonal conduit: subtle translucent line
+            float line_alpha = std::clamp(l.intensity * (l.is_causal ? 0.45f : 0.22f), 0.05f, 0.65f);
             uint8_t ur = static_cast<uint8_t>(std::clamp(lr * 255.0f, 0.0f, 255.0f));
             uint8_t ug = static_cast<uint8_t>(std::clamp(lg * 255.0f, 0.0f, 255.0f));
             uint8_t ub = static_cast<uint8_t>(std::clamp(lb * 255.0f, 0.0f, 255.0f));
 
             drawLineBlended(framebuffer, stride, height, p0.sx, p0.sy, p1.sx, p1.sy,
-                            ur, ug, ub, alpha, vp_x, vp_y, max_x, max_y);
+                            ur, ug, ub, line_alpha, vp_x, vp_y, max_x, max_y);
+
+            // Animated Action Potential Energy Packet traveling along the axon conduit
+            float pr = std::clamp(l.progress, 0.0f, 1.0f);
+            int ex = static_cast<int>(p0.sx + (p1.sx - p0.sx) * pr);
+            int ey = static_cast<int>(p0.sy + (p1.sy - p0.sy) * pr);
+
+            if (ex >= vp_x + 1 && ex < max_x - 1 && ey >= vp_y + 1 && ey < max_y - 1) {
+                // Incandescent electric pulse head
+                framebuffer[ey * stride + ex] = 0xFFFFFFFF;
+                uint32_t glow_col = (0xFF << 24) | (ub << 16) | (ug << 8) | ur;
+                framebuffer[ey * stride + (ex - 1)] = glow_col;
+                framebuffer[ey * stride + (ex + 1)] = glow_col;
+                framebuffer[(ey - 1) * stride + ex] = glow_col;
+                framebuffer[(ey + 1) * stride + ex] = glow_col;
+
+                if (l.is_causal) {
+                    // Trailing impulse spark for functional thought conduits
+                    float trail_pr = std::max(0.0f, pr - 0.12f);
+                    int tx = static_cast<int>(p0.sx + (p1.sx - p0.sx) * trail_pr);
+                    int ty = static_cast<int>(p0.sy + (p1.sy - p0.sy) * trail_pr);
+                    if (tx >= vp_x && tx < max_x && ty >= vp_y && ty < max_y) {
+                        framebuffer[ty * stride + tx] = glow_col;
+                    }
+                }
+            }
         }
     }
 
-    // 3. Render 3D Point Cloud Nodes
+    // 4. Render 3D Point Cloud Nodes with Two-Tier Visual Hierarchy
     for (size_t i = 0; i < m_vertices.size(); ++i) {
         const auto& pt = m_projectedPoints[i];
         if (!pt.valid) continue;
@@ -255,48 +306,124 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
         }
 
         bool is_focus = (v.neuron_idx == focus_neuron);
-        if (is_focus) {
-            glow = std::max(glow, 0.85f);
-        }
-
-        // Color blending: base neuropil color -> brilliant incandescent white on spike
-        float r_f = std::clamp((v.r * (1.0f - glow) + 1.0f * glow) * 255.0f, 0.0f, 255.0f);
-        float g_f = std::clamp((v.g * (1.0f - glow) + 0.96f * glow) * 255.0f, 0.0f, 255.0f);
-        float b_f = std::clamp((v.b * (1.0f - glow) + 0.88f * glow) * 255.0f, 0.0f, 255.0f);
-
-        if (is_focus) {
-            r_f = 255.0f; g_f = 215.0f; b_f = 0.0f; // Radiant Gold
-        }
-
-        uint8_t r = static_cast<uint8_t>(r_f);
-        uint8_t g = static_cast<uint8_t>(g_f);
-        uint8_t b = static_cast<uint8_t>(b_f);
-        uint32_t point_color = (0xFF << 24) | (b << 16) | (g << 8) | r;
-
         int sx = pt.sx;
         int sy = pt.sy;
 
-        if (glow > 0.25f || is_focus) {
-            // Glowing diamond halo for firing action potential
+        if (is_focus) {
+            // Prominent Focus / Target Tile Neuron: Radiant Gold Multi-Stage Orb
+            framebuffer[sy * stride + sx] = 0xFFFFFFFF; // Pure white core
+            const uint32_t gold_halo = 0xFFF59E0B;
+            const uint32_t bright_gold = 0xFFFDE047;
+
+            if (sx > vp_x) framebuffer[sy * stride + (sx - 1)] = bright_gold;
+            if (sx + 1 < max_x) framebuffer[sy * stride + (sx + 1)] = bright_gold;
+            if (sy > vp_y) framebuffer[(sy - 1) * stride + sx] = bright_gold;
+            if (sy + 1 < max_y) framebuffer[(sy + 1) * stride + sx] = bright_gold;
+
+            // Diamond halo
+            if (sx > vp_x + 1) framebuffer[sy * stride + (sx - 2)] = gold_halo;
+            if (sx + 2 < max_x) framebuffer[sy * stride + (sx + 2)] = gold_halo;
+            if (sy > vp_y + 1) framebuffer[(sy - 2) * stride + sx] = gold_halo;
+            if (sy + 2 < max_y) framebuffer[(sy + 2) * stride + sx] = gold_halo;
+
+            // Animated Pulsing Target Reticle
+            float pulse = 0.5f + 0.5f * std::sin(m_animTime * 6.0f);
+            int reticle_r = 5 + static_cast<int>(pulse * 2.0f);
+
+            DrawUtils::drawCircleOutline(framebuffer, stride, height, sx, sy, reticle_r, 0xFFFBBF24);
+
+            // Reticle crosshair corner ticks
+            if (sx - reticle_r - 2 >= vp_x) framebuffer[sy * stride + (sx - reticle_r - 2)] = 0xFFFFFFFF;
+            if (sx + reticle_r + 2 < max_x) framebuffer[sy * stride + (sx + reticle_r + 2)] = 0xFFFFFFFF;
+            if (sy - reticle_r - 2 >= vp_y) framebuffer[(sy - reticle_r - 2) * stride + sx] = 0xFFFFFFFF;
+            if (sy + reticle_r + 2 < max_y) framebuffer[(sy + reticle_r + 2) * stride + sx] = 0xFFFFFFFF;
+
+            // If target tile coordinates are active, draw coordinate tag card
+            if (target_r >= 0 && target_c >= 0) {
+                char tag_buf[32];
+                std::snprintf(tag_buf, sizeof(tag_buf), "TARGET (%d,%d)", target_r, target_c);
+                int tag_x = std::clamp(sx + reticle_r + 6, vp_x + 8, max_x - 110);
+                int tag_y = std::clamp(sy - 7, vp_y + 80, max_y - 20);
+
+                DrawUtils::drawRectFilled(framebuffer, stride, height, tag_x, tag_y, 96, 16, 0xF00F172A);
+                DrawUtils::drawRectOutline(framebuffer, stride, height, tag_x, tag_y, 96, 16, 1, 0xFFF59E0B);
+                DrawUtils::drawString(framebuffer, stride, height, tag_x + 6, tag_y + 4, tag_buf, 0xFFFDE047, 1);
+            }
+        } else if (glow > 0.20f) {
+            // Active Firing Macro-Node (3px to 5px glowing orb with incandescent core)
+            float r_f = std::clamp((v.r * (1.0f - glow) + 1.0f * glow) * 255.0f, 0.0f, 255.0f);
+            float g_f = std::clamp((v.g * (1.0f - glow) + 0.96f * glow) * 255.0f, 0.0f, 255.0f);
+            float b_f = std::clamp((v.b * (1.0f - glow) + 0.88f * glow) * 255.0f, 0.0f, 255.0f);
+            uint8_t ur = static_cast<uint8_t>(r_f);
+            uint8_t ug = static_cast<uint8_t>(g_f);
+            uint8_t ub = static_cast<uint8_t>(b_f);
+            uint32_t point_color = (0xFF << 24) | (ub << 16) | (ug << 8) | ur;
+
             framebuffer[sy * stride + sx] = 0xFFFFFFFF; // Incandescent center
             if (sx > vp_x) framebuffer[sy * stride + (sx - 1)] = point_color;
             if (sx + 1 < max_x) framebuffer[sy * stride + (sx + 1)] = point_color;
             if (sy > vp_y) framebuffer[(sy - 1) * stride + sx] = point_color;
             if (sy + 1 < max_y) framebuffer[(sy + 1) * stride + sx] = point_color;
 
-            if (is_focus) {
-                // Outer ring for focus neuron
-                if (sx > vp_x + 1) framebuffer[sy * stride + (sx - 2)] = 0xFFF59E0B;
-                if (sx + 2 < max_x) framebuffer[sy * stride + (sx + 2)] = 0xFFF59E0B;
-                if (sy > vp_y + 1) framebuffer[(sy - 2) * stride + sx] = 0xFFF59E0B;
-                if (sy + 2 < max_y) framebuffer[(sy + 2) * stride + sx] = 0xFFF59E0B;
+            if (glow > 0.65f) {
+                // Outer halo for high-intensity action potential spikes
+                if (sx > vp_x + 1) framebuffer[sy * stride + (sx - 2)] = point_color;
+                if (sx + 2 < max_x) framebuffer[sy * stride + (sx + 2)] = point_color;
+                if (sy > vp_y + 1) framebuffer[(sy - 2) * stride + sx] = point_color;
+                if (sy + 2 < max_y) framebuffer[(sy + 2) * stride + sx] = point_color;
             }
         } else {
-            framebuffer[sy * stride + sx] = point_color;
+            // Subdued Translucent Anatomical Scaffold (Single 1x1 pixel)
+            // Low-luminance ambient tint forms the biological 3D silhouette without clutter
+            uint8_t ur = static_cast<uint8_t>(v.r * 50.0f + 10.0f);
+            uint8_t ug = static_cast<uint8_t>(v.g * 60.0f + 14.0f);
+            uint8_t ub = static_cast<uint8_t>(v.b * 75.0f + 22.0f);
+            framebuffer[sy * stride + sx] = (0xFF << 24) | (ub << 16) | (ug << 8) | ur;
         }
     }
 
-    // 4. Render 3D Anatomical Neuropil Badges
+    // 5. PAM11 Dopamine Reward Shockwave
+    float dopa = engine.getDopamineLevel();
+    if (dopa > 0.15f) {
+        for (const auto& c : m_centroids) {
+            if (c.id == NeuropilID::MushroomBody) {
+                float dx = c.x - m_targetX;
+                float dy = c.y - m_targetY;
+                float dz = c.z - m_targetZ;
+                float rx = dx * cos_y - dz * sin_y;
+                float rz = dx * sin_y + dz * cos_y;
+                float ry = dy * cos_p - rz * sin_p;
+                float cam_z = dy * sin_p + rz * cos_p + m_distance;
+                if (cam_z > 50.0f) {
+                    float inv_z = 1.0f / cam_z;
+                    int cx = static_cast<int>(half_w + (rx * fov_factor * inv_z));
+                    int cy = static_cast<int>(half_h - (ry * fov_factor * inv_z));
+                    int wave_r = static_cast<int>((1.0f - dopa) * 55.0f) + 8;
+                    if (cx - wave_r > vp_x && cx + wave_r < max_x && cy - wave_r > vp_y && cy + wave_r < max_y) {
+                        DrawUtils::drawCircleOutline(framebuffer, stride, height, cx, cy, wave_r, 0xFF34D399);
+                        if (wave_r > 6) {
+                            DrawUtils::drawCircleOutline(framebuffer, stride, height, cx, cy, wave_r - 4, 0xFF10B981);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // 6. Collision-Free Solid Neuropil Badges
+    struct ProjectedBadge {
+        const char* name;
+        uint32_t color;
+        int orig_sx;
+        int orig_sy;
+        int badge_sx;
+        int badge_sy;
+        bool is_active;
+        const char* active_label;
+    };
+    std::vector<ProjectedBadge> badges;
+
     for (const auto& c : m_centroids) {
         float dx = c.x - m_targetX;
         float dy = c.y - m_targetY;
@@ -313,11 +440,77 @@ void BrainRenderer::renderSoftware(uint32_t* framebuffer, int stride, int height
         int sx = static_cast<int>(half_w + (rx * fov_factor * inv_z));
         int sy = static_cast<int>(half_h - (ry * fov_factor * inv_z));
 
-        // Display labels neatly within viewport bounds
-        if (sx >= vp_x + 15 && sx <= max_x - 130 && sy >= vp_y + 70 && sy <= max_y - 20) {
-            DrawUtils::drawCircleFilled(framebuffer, stride, height, sx, sy, 3, c.color);
-            DrawUtils::drawString(framebuffer, stride, height, sx + 6, sy - 4, c.name, c.color, 1);
+        bool active = false;
+        const char* active_text = "";
+        if (c.id == NeuropilID::OpticLobe && cognitive_phase == 1) {
+            active = true;
+            active_text = c.is_left_optic ? "[► L. OPTIC SCAN ◄]" : "[► R. OPTIC SCAN ◄]";
+        } else if (c.id == NeuropilID::CentralComplex && cognitive_phase == 2) {
+            active = true;
+            active_text = "[► COMPASS (CX) ◄]";
+        } else if (c.id == NeuropilID::MushroomBody && cognitive_phase == 3) {
+            active = true;
+            active_text = "[► MUSHROOM MB ◄]";
+        } else if (c.id == NeuropilID::SubesophagealZone && cognitive_phase == 4) {
+            active = true;
+            active_text = "[► MOTOR SEZ ◄]";
         }
+
+        ProjectedBadge b{};
+        b.name = c.name;
+        b.color = c.color;
+        b.orig_sx = sx;
+        b.orig_sy = sy;
+        b.badge_sx = sx;
+        b.badge_sy = sy;
+        b.is_active = active;
+        b.active_label = active_text;
+        badges.push_back(b);
+    }
+
+    // Sort badges vertically by orig_sy to resolve screen collisions
+    std::sort(badges.begin(), badges.end(), [](const ProjectedBadge& a, const ProjectedBadge& b) {
+        return a.orig_sy < b.orig_sy;
+    });
+
+    // Resolve collisions: enforce minimum 24px vertical separation
+    for (size_t i = 1; i < badges.size(); ++i) {
+        if (badges[i].badge_sy < badges[i - 1].badge_sy + 24) {
+            badges[i].badge_sy = badges[i - 1].badge_sy + 24;
+        }
+    }
+
+    // Render each badge as a solid dark pill card with clear text
+    for (auto& b : badges) {
+        const char* display_text = b.is_active ? b.active_label : b.name;
+        int text_len = static_cast<int>(std::strlen(display_text));
+        int card_w = text_len * 8 + 24;
+        int card_h = 20;
+
+        // Clamp within viewport bounds
+        int bx = std::clamp(b.badge_sx - card_w / 2, vp_x + 12, max_x - card_w - 12);
+        int by = std::clamp(b.badge_sy - card_h / 2, vp_y + 80, max_y - card_h - 10);
+
+        // Leader line from 3D centroid point to badge
+        if (std::abs(bx + card_w / 2 - b.orig_sx) > 10 || std::abs(by + card_h / 2 - b.orig_sy) > 10) {
+            DrawUtils::drawLine(framebuffer, stride, height, b.orig_sx, b.orig_sy, bx + card_w / 2, by + card_h / 2,
+                                b.is_active ? 0xFFFFFFFF : (b.color & 0x66FFFFFF));
+        }
+
+        // Solid background card: prevents any dots or lines from bleeding through text!
+        DrawUtils::drawRectFilled(framebuffer, stride, height, bx, by, card_w, card_h, 0xF2090E18);
+
+        // 1px Border (bright white if active, neuropil color if idle)
+        uint32_t border_col = b.is_active ? 0xFFFFFFFF : b.color;
+        DrawUtils::drawRectOutline(framebuffer, stride, height, bx, by, card_w, card_h, 1, border_col);
+
+        // Status dot
+        uint32_t dot_col = b.is_active ? 0xFF22C55E : b.color;
+        DrawUtils::drawCircleFilled(framebuffer, stride, height, bx + 10, by + card_h / 2, 3, dot_col);
+
+        // Text
+        uint32_t text_col = b.is_active ? 0xFFFFFFFF : 0xFFE2E8F0;
+        DrawUtils::drawString(framebuffer, stride, height, bx + 18, by + 6, display_text, text_col, 1);
     }
 }
 

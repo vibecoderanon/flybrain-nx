@@ -261,10 +261,13 @@ int main(int argc, char* argv[]) {
                                 cursor_r, cursor_c, is_autopilot, arena, solve_timer);
 
             // Right Panel (640, 0, 640, 680): 3D Connectome Visualizer & Axon Lines
-            renderer.renderSoftware(fb_ptr, 1280, 720, engine, 640, 0, 640, 680, cognitive_phase);
+            renderer.renderSoftware(fb_ptr, 1280, 720, engine, 640, 0, 640, 680, cognitive_phase, solve_timer, cursor_r, cursor_c);
 
             // Top Right Spectator Gauges (648, 8, 620, 58): Stonkfly / Doomfly Inspired
             hud.renderSpectatorGauges(fb_ptr, 1280, 720, engine, pace_int);
+
+            // Circuit Highway Signal Flow (648, 68, 620, 24)
+            hud.renderCircuitHighway(fb_ptr, 1280, 720, cognitive_phase, solve_timer);
 
             // Bottom Bar (0, 680, 1280, 40): Telemetry & Controller Legend
             hud.render(fb_ptr, 1280, 720, engine, fps, lines_on);
@@ -274,8 +277,9 @@ int main(int argc, char* argv[]) {
 #else
         picross_view.render(host_fb.data(), 1280, 720, board, puzzle.title, puzzle.category,
                             cursor_r, cursor_c, is_autopilot, arena, solve_timer);
-        renderer.renderSoftware(host_fb.data(), 1280, 720, engine, 640, 0, 640, 680, cognitive_phase);
+        renderer.renderSoftware(host_fb.data(), 1280, 720, engine, 640, 0, 640, 680, cognitive_phase, solve_timer, cursor_r, cursor_c);
         hud.renderSpectatorGauges(host_fb.data(), 1280, 720, engine, pace_int);
+        hud.renderCircuitHighway(host_fb.data(), 1280, 720, cognitive_phase, solve_timer);
         hud.render(host_fb.data(), 1280, 720, engine, fps, lines_on);
 #endif
     }

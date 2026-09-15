@@ -109,4 +109,69 @@ void TelemetryHUD::renderSpectatorGauges(uint32_t* fb, int width, int height, co
     drawGauge(3, "COMPASS (CX)", engine.getCompassLevel(), 0xFFF59E0B, 0xFFFBBF24);
 }
 
+void TelemetryHUD::renderCircuitHighway(uint32_t* fb, int width, int height, int cognitive_phase, float anim_time) {
+    if (!fb || width <= 0 || height <= 0) return;
+
+    int gx = 648;
+    int gy = 68;
+    int gw = 620;
+    int gh = 24;
+
+    // Outer container
+    DrawUtils::drawRectFilled(fb, width, height, gx, gy, gw, gh, 0xEE0B1220);
+    DrawUtils::drawRectOutline(fb, width, height, gx, gy, gw, gh, 1, 0xFF1E293B);
+
+    struct Stage {
+        const char* label;
+        int phase_id;
+        uint32_t base_col;
+        uint32_t glow_col;
+    };
+
+    Stage stages[4] = {
+        {"1:OPTIC", 1, 0xFF06B6D4, 0xFF38BDF8},
+        {"2:COMPASS", 2, 0xFFF59E0B, 0xFFFDE047},
+        {"3:MUSHROOM", 3, 0xFFF43F5E, 0xFFFDA4AF},
+        {"4:MOTOR", 4, 0xFFF97316, 0xFFFDBA74}
+    };
+
+    int stage_w = 114;
+    int stage_h = 16;
+    int start_x = gx + 8;
+    int stage_y = gy + 4;
+    int arrow_gap = 40;
+
+    for (int i = 0; i < 4; ++i) {
+        int sx = start_x + i * (stage_w + arrow_gap);
+        bool is_active = (cognitive_phase == stages[i].phase_id);
+
+        uint32_t card_bg = is_active ? 0xFF1E293B : 0xFF0F172A;
+        uint32_t border_col = is_active ? 0xFFFFFFFF : stages[i].base_col;
+        uint32_t text_col = is_active ? 0xFFFFFFFF : stages[i].glow_col;
+
+        DrawUtils::drawRectFilled(fb, width, height, sx, stage_y, stage_w, stage_h, card_bg);
+        DrawUtils::drawRectOutline(fb, width, height, sx, stage_y, stage_w, stage_h, 1, border_col);
+
+        // Status indicator dot
+        uint32_t dot_col = is_active ? 0xFF22C55E : stages[i].base_col;
+        DrawUtils::drawCircleFilled(fb, width, height, sx + 8, stage_y + 8, 3, dot_col);
+
+        DrawUtils::drawString(fb, width, height, sx + 16, stage_y + 4, stages[i].label, text_col, 1);
+
+        // Connector Arrow between stages
+        if (i < 3) {
+            int ax = sx + stage_w + 6;
+            int ay = stage_y + 8;
+            uint32_t arrow_col = (cognitive_phase > stages[i].phase_id) ? 0xFF38BDF8 : 0xFF475569;
+            if (is_active) {
+                float p = 0.5f + 0.5f * std::sin(anim_time * 12.0f);
+                arrow_col = (p > 0.4f) ? 0xFFFFFFFF : 0xFF38BDF8;
+            }
+            DrawUtils::drawLine(fb, width, height, ax, ay, ax + 18, ay, arrow_col);
+            DrawUtils::drawLine(fb, width, height, ax + 14, ay - 3, ax + 18, ay, arrow_col);
+            DrawUtils::drawLine(fb, width, height, ax + 14, ay + 3, ax + 18, ay, arrow_col);
+        }
+    }
+}
+
 } // namespace flybrain

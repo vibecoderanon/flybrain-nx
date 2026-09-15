@@ -25,6 +25,8 @@ struct NeuropilCentroid {
     const char* name;
     float x, y, z;
     uint32_t color;
+    bool is_left_optic = false;
+    bool is_right_optic = false;
 };
 
 class BrainRenderer {
@@ -60,10 +62,14 @@ public:
      * @param vp_w Viewport width (e.g. 640)
      * @param vp_h Viewport height (e.g. 680)
      * @param cognitive_phase Current fly thought stage (1=Scan, 2=Walk, 3=Inspect, 4=Actuate)
+     * @param anim_time Continuous animation timestamp for traveling wave and reticle pulse
+     * @param target_r Current Picross target deduction row (-1 if none)
+     * @param target_c Current Picross target deduction column (-1 if none)
      */
     void renderSoftware(uint32_t* framebuffer, int stride, int height, const LIFEngine& engine,
                         int vp_x = 0, int vp_y = 0, int vp_w = 1280, int vp_h = 720,
-                        int cognitive_phase = 0);
+                        int cognitive_phase = 0, float anim_time = 0.0f,
+                        int target_r = -1, int target_c = -1);
 
     float getCameraYaw() const { return m_yaw; }
     float getCameraPitch() const { return m_pitch; }
@@ -76,6 +82,7 @@ private:
     int m_screenWidth = 1280;
     int m_screenHeight = 720;
     bool m_showAxonLines = true;
+    float m_animTime = 0.0f;
 
     // Orbit Camera Parameters
     float m_yaw = 0.0f;

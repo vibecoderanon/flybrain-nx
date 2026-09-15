@@ -48,8 +48,19 @@ Following the release of the complete adult fruit fly connectome (*FlyWire 2024*
    * An amber laser targeting beam connects the fly's eyes to the exact row/column clues and grid line currently being scrutinized.
 
 4. **3D Anatomical Neuropil Badges & Deliberation Highway:**
-   * Floating 3D labels identify `[OPTIC LOBES]`, `[MUSHROOM BODY]`, `[CENTRAL COMPLEX]`, and `[MOTOR SEZ]`.
-   * Active lobes spotlight in high contrast as signals flow from sensory ingestion to motor actuation.
+   * Bilateral floating 3D labels identify `[L. OPTIC LOBE]`, `[R. OPTIC LOBE]`, `[CENTRAL COMPLEX]`, `[MUSHROOM BODY]`, and `[MOTOR SEZ]`.
+   * Badges are rendered inside solid dark pill cards (`#0a1220`) with 1px colored neuropil borders and leader lines—completely eliminating text clipping or overlap from any camera angle.
+   * Active lobes spotlight dynamically (e.g. `[► L. OPTIC SCAN ◄]`) as signals flow from sensory ingestion to motor actuation.
+
+5. **Two-Tier Visual Hierarchy & Traveling Action Potential Packets:**
+   * **Anatomical Scaffold:** 10,000 background neurons rendered in low-luminance translucent slate/cyan, creating the distinct 3D anatomical silhouette without visual clutter.
+   * **Active Macro-Nodes:** Firing neurons expand into 3px–5px radiant glowing orbs with multi-stage bloom.
+   * **Target Tile Reticle `(R, C)`:** The neuron corresponding to the active Picross deduction tile features a pulsing golden target ring with an on-screen coordinate pill tag.
+   * **Traveling Axon Pulses:** 16–24 directed synaptic conduits feature animated action potential energy packets traversing axons over ~0.35s, with software rendering locked at **60 FPS**.
+
+6. **Circuit Highway Signal Flow Indicator (Below Spectator Gauges):**
+   * Real-time 4-stage neural pipeline: `[ 👁️ OPTIC ] ──► [ 🧭 COMPASS ] ──► [ 🧠 MUSHROOM ] ──► [ ⚡ MOTOR ]`
+   * Animated chevrons pulse along the circuit highway to illustrate cognitive signal transmission.
 
 ---
 
@@ -290,7 +301,7 @@ flybrain-nx/
    ```
 
 ### SD Card Deployment
-1. Extract `release/flybrain-nx-switch-v1.2.0.zip` to the root of your SD card:
+1. Extract `release/flybrain-nx-switch-v1.3.0.zip` to the root of your SD card:
    ```
    sdmc:/
    └── switch/

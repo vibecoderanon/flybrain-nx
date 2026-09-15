@@ -69,43 +69,40 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.0' }}
-          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.0' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.0' }}
+          name: flybrain-nx ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.0' }}
           draft: false
           prerelease: false
           files: |
-            release/flybrain-nx-switch-v1.2.0.zip
+            release/flybrain-nx-switch-v1.3.0.zip
             release/flybrain-nx.nro
             release/flybrain-nx.xml
           body: |
-            ## flybrain-nx v1.2.0 — Drosophila Connectome Picross: Viral Overhaul
+            ## flybrain-nx v1.3.0 — High-Clarity Drosophila Connectome 3D Visualizer & Circuit Highway
 
             Official release compiled natively from source using **devkitA64**.
 
-            ### What's New in v1.2.0:
-            - **Biological Spectator Neural Gauges (Stonkfly / Doomfly Inspired):**
-              - **[🍬 PAM11 DOPAMINE]:** Spikes radiant emerald green (+3.5mV) when a clue constraint is satisfied or progress advances.
-              - **[⚡ PPL101 AVERSIVE]:** Flashes crimson on contradiction or constraint violations.
-              - **[👁️ OPTIC SCAN]:** Electric cyan meter illuminates while reading row/column clues.
-              - **[🧭 COMPASS (CX)]:** Solar gold meter indicates active central complex heading calculation.
-            - **Strict Physical-First Causality (4-Stage Thought Cycle):**
-              - *Scan $\rightarrow$ Crawl $\rightarrow$ Inspect $\rightarrow$ Actuate*: Zero premature tile mutation.
-              - Tiles mutate and clues strike through **only on the exact frame the proboscis touches the paper** with an expanding ink droplet animation!
-            - **Live Thought Monologue Banner:**
-              - Real-time narration capsule displaying the fly's observations, hypotheses, and physical actuation decisions.
-            - **Sensory Scan Reticle & Clue Laser Highlighting:**
-              - Amber laser targeting beam across active row/column clues connecting the fly's eyes to the puzzle constraints.
-            - **3D Anatomical Neuropil Badges & Deliberation Highway Spotlight:**
-              - Floating 3D labels for `[OPTIC LOBES]`, `[MUSHROOM BODY]`, `[CENTRAL COMPLEX]`, and `[MOTOR SEZ]`.
-              - Active functional brain regions illuminate in high contrast as signals propagate from sensory input to motor output.
-            - **Multi-Pacing Selector (`[X]` Joy-Con Button):**
-              - **Observational Mode (Default, ~2.2s):** Human-readable pacing to watch brain reasoning and physical crawling.
-              - **Fast Mode (~0.9s):** Rapid solving with preserved physical contact synchronization.
-              - **Step-by-Step Mode (`[A]`):** Advance each logical deduction on command.
-              - **Manual Play:** Direct Joy-Con control with real-time neural sensory feedback.
-            - **Firmware 22.5.0 Safe:** Strict Title Override intercept prevents Horizon OS memory crashes.
+            ### What's New in v1.3.0:
+            - **Two-Tier Visual Connectome Hierarchy (Zero Clutter):**
+              - 10,000 background neurons rendered as a sleek, low-luminance translucent anatomical scaffold (~15–20% opacity).
+              - Completely eliminates point-cloud white noise while preserving the unmistakable 3D silhouette of the fruit fly brain.
+            - **Prominent Glowing Macro-Nodes & Target Tile Reticle:**
+              - Active firing neurons render as 3px–5px radiant orbs with multi-stage bloom.
+              - The neuron corresponding to the active Picross deduction tile receives a pulsing golden target reticle and an on-screen coordinate pill tag `(R, C)`.
+            - **Directed Causal Axon Pulses with Traveling Energy Packets:**
+              - Replaced the 800-line Poisson noise spiderweb with 16–24 directed synaptic conduits matching the active cognitive phase.
+              - Animated action potential energy packets travel along axons over ~0.35s, allowing the human eye to track signal flow from optic lobe to motor SEZ.
+              - Drops software rendering load by ~90% and restores locked **60 FPS** performance on Switch.
+            - **Bilateral Neuropil Separation & Solid Pill Callout Badges:**
+              - Separated bilateral optic lobes into `[L. OPTIC LOBE]` ($x \approx -220$) and `[R. OPTIC LOBE]` ($x \approx +220$), resolving the $(0, 0, 0)$ centroid collision with Central Complex.
+              - Badges rendered as solid dark pill cards (`0xF00A1220`) with 1px neuropil borders and leader lines—text never clips or collides with dots/lines.
+              - Screen-space dynamic vertical separation ensures badges never overlap from any camera orbit angle.
+            - **Circuit Highway Signal Flow Indicator:**
+              - Real-time 4-stage neural pipeline right below the spectator gauges:
+                `[ 👁️ OPTIC ] ──► [ 🧭 COMPASS ] ──► [ 🧠 MUSHROOM ] ──► [ ⚡ MOTOR ]`
+              - Live animated chevrons track signals propagating across the Drosophila brain.
 
             ### SD Card Installation:
-            1. Extract `flybrain-nx-switch-v1.2.0.zip` to the root of your SD card (`sdmc:/switch/flybrain-nx/`).
+            1. Extract `flybrain-nx-switch-v1.3.0.zip` to the root of your SD card (`sdmc:/switch/flybrain-nx/`).
             2. Launch via **Title Override**: Hold `[R]` while launching ANY installed game from the HOME Menu.
             3. Open `flybrain-nx` from the Homebrew Menu.

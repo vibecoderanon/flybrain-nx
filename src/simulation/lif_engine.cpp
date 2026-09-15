@@ -45,11 +45,25 @@ bool LIFEngine::init(const ConnectomeLoader& loader) {
     m_spikesCounter = 0;
     std::fill(std::begin(m_neuropilSpikeCounters), std::end(m_neuropilSpikeCounters), 0);
 
+    for (int k = 0; k < 9; ++k) {
+        m_neuropilNeurons[k].clear();
+    }
+    for (uint32_t i = 0; i < m_numNeurons; ++i) {
+        uint8_t nid = m_neurons[i].neuropil_id;
+        if (nid < 9) {
+            m_neuropilNeurons[nid].push_back(i);
+        }
+    }
+
     // Initialize tile neuron cluster mappings (up to 100 tiles for 10x10)
     m_tileNeuronClusters.resize(100);
+    const auto& cx_neurons = m_neuropilNeurons[static_cast<uint8_t>(NeuropilID::CentralComplex)];
     for (uint32_t t = 0; t < 100; ++t) {
-        // Distribute evenly across connectome with Central Complex / Optic bias
-        m_tileNeuronClusters[t] = (t * 7919) % m_numNeurons;
+        if (!cx_neurons.empty()) {
+            m_tileNeuronClusters[t] = cx_neurons[(t * 31) % cx_neurons.size()];
+        } else {
+            m_tileNeuronClusters[t] = (t * 7919) % m_numNeurons;
+        }
     }
     m_picrossFocusNeuron = m_tileNeuronClusters[0];
 
@@ -143,6 +157,38 @@ void LIFEngine::updatePicrossSensoryFeedback() {
     }
 }
 
+void LIFEngine::triggerCausalPulse(uint8_t src_neuropil, uint8_t dst_neuropil, float intensity) {
+    if (src_neuropil >= 9 || dst_neuropil >= 9 || m_numNeurons == 0) return;
+    const auto& src_list = m_neuropilNeurons[src_neuropil];
+    const auto& dst_list = m_neuropilNeurons[dst_neuropil];
+    if (src_list.empty() || dst_list.empty()) return;
+
+    int pulse_count = (src_neuropil == dst_neuropil) ? 2 : 3;
+    for (int k = 0; k < pulse_count; ++k) {
+        if (m_activeLines.size() >= MAX_ACTIVE_LINES) {
+            m_activeLines.erase(m_activeLines.begin());
+        }
+        m_stepRandState ^= (m_stepRandState << 13);
+        m_stepRandState ^= (m_stepRandState >> 17);
+        m_stepRandState ^= (m_stepRandState << 5);
+
+        uint32_t s_idx = src_list[m_stepRandState % src_list.size()];
+        uint32_t d_idx = dst_list[(m_stepRandState / 11 + k * 13) % dst_list.size()];
+
+        SynapticLineEvent line{};
+        line.src_idx = s_idx;
+        line.dst_idx = d_idx;
+        line.progress = 0.0f;
+        line.speed = 0.032f; // Traverses axon in ~30 steps (~0.35s visual persist)
+        line.intensity = intensity;
+        line.neuropil_id = src_neuropil;
+        line.is_causal = true;
+        m_activeLines.push_back(line);
+
+        injectCurrent(s_idx, 20.0f * intensity);
+    }
+}
+
 bool LIFEngine::prepareNextDeduction(int& out_r, int& out_c, CellState& out_action, int& out_scan_type, int& out_scan_idx) {
     if (!m_picrossBoard || m_picrossBoard->isSolved()) return false;
 
@@ -153,8 +199,10 @@ bool LIFEngine::prepareNextDeduction(int& out_r, int& out_c, CellState& out_acti
             int w = m_picrossBoard->getWidth();
             uint32_t cluster_idx = (out_r * w + out_c) % m_tileNeuronClusters.size();
             m_picrossFocusNeuron = m_tileNeuronClusters[cluster_idx];
-            injectCurrent(m_picrossFocusNeuron, 15.0f);
+            injectCurrent(m_picrossFocusNeuron, 25.0f);
         }
+        // Deliberation causal pathway: Central Complex -> Mushroom Body
+        triggerCausalPulse(static_cast<uint8_t>(NeuropilID::CentralComplex), static_cast<uint8_t>(NeuropilID::MushroomBody), 1.0f);
         return true;
     }
     return false;
@@ -169,8 +217,12 @@ void LIFEngine::commitDeduction(int r, int c, CellState action) {
         int w = m_picrossBoard->getWidth();
         uint32_t cluster_idx = (r * w + c) % m_tileNeuronClusters.size();
         m_picrossFocusNeuron = m_tileNeuronClusters[cluster_idx];
-        injectCurrent(m_picrossFocusNeuron, 45.0f);
+        injectCurrent(m_picrossFocusNeuron, 50.0f);
     }
+
+    // Actuation causal cascade: Mushroom Body -> Motor SEZ -> Descending Motor
+    triggerCausalPulse(static_cast<uint8_t>(NeuropilID::MushroomBody), static_cast<uint8_t>(NeuropilID::SubesophagealZone), 1.0f);
+    triggerCausalPulse(static_cast<uint8_t>(NeuropilID::SubesophagealZone), static_cast<uint8_t>(NeuropilID::DescendingMotor), 1.0f);
 
     if (action == CellState::Filled) {
         injectTaste(true, 1.8f);
@@ -233,6 +285,8 @@ void LIFEngine::setOpticScanActive(bool active) {
                 injectCurrent(i, 6.0f);
             }
         }
+        // Visual stream causal pulse: Optic Lobes -> Central Complex & Mushroom Body
+        triggerCausalPulse(static_cast<uint8_t>(NeuropilID::OpticLobe), static_cast<uint8_t>(NeuropilID::CentralComplex), 1.0f);
     }
 }
 
@@ -244,6 +298,8 @@ void LIFEngine::setCompassActive(bool active) {
                 injectCurrent(i, 6.0f);
             }
         }
+        // Internal compass ring attractor circulation in Central Complex
+        triggerCausalPulse(static_cast<uint8_t>(NeuropilID::CentralComplex), static_cast<uint8_t>(NeuropilID::CentralComplex), 0.9f);
     }
 }
 
@@ -322,9 +378,12 @@ void LIFEngine::step(float dt_ms) {
     }
 
     // 2. Synaptic Propagation Phase (O(1) loop bounds based on speed mode)
-    // Age existing synaptic lines first
+    // Age and advance existing synaptic lines
     for (auto it = m_activeLines.begin(); it != m_activeLines.end(); ) {
-        it->intensity -= 0.18f;
+        it->progress += it->speed * (dt_ms / 1.0f);
+        if (it->progress >= 1.0f) {
+            it->intensity -= 0.08f;
+        }
         if (it->intensity <= 0.0f) {
             it = m_activeLines.erase(it);
         } else {
@@ -349,7 +408,6 @@ void LIFEngine::step(float dt_ms) {
         }
 
         const SynapseRecord* syn_base = &m_synapses[n.synapse_offset];
-        uint32_t lines_added_for_this_spike = 0;
 
         for (uint32_t s = 0; s < syn_count; ++s) {
             const SynapseRecord& syn = syn_base[s];
@@ -361,15 +419,18 @@ void LIFEngine::step(float dt_ms) {
             }
             m_synapticInputAccumulator[syn.target_neuron_idx].fetch_add(w, std::memory_order_relaxed);
 
-            // Record active synaptic beam for 3D visualizer (sample up to 4 primary lines per spike)
-            if (lines_added_for_this_spike < 4 && m_activeLines.size() < MAX_ACTIVE_LINES) {
+            // Subtle biological background transmission: only sample strong anatomical synapses (weight >= 4)
+            // with sparse probability when under budget, keeping causal pathways crystal clear and 60 FPS locked
+            if (syn.weight >= 4 && m_activeLines.size() < MAX_ACTIVE_LINES && ((m_stepRandState & 0x3F) == 0)) {
                 SynapticLineEvent line{};
                 line.src_idx = spike_idx;
                 line.dst_idx = syn.target_neuron_idx;
-                line.intensity = 1.0f;
+                line.progress = 0.0f;
+                line.speed = 0.038f;
+                line.intensity = 0.60f;
                 line.neuropil_id = n.neuropil_id;
+                line.is_causal = false;
                 m_activeLines.push_back(line);
-                lines_added_for_this_spike++;
             }
         }
     }

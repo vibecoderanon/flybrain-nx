@@ -59,7 +59,7 @@ LIBDIRS := $(PORTLIBS) $(LIBNX)
 #---------------------------------------------------------------------------------
 APP_TITLE       := flybrain-nx
 APP_AUTHOR      := vibecoderanon
-APP_VERSION     := 1.1.0
+APP_VERSION     := 1.3.0
 APP_DESCRIPTION := Biological Neuromorphic Picross Solver & Drosophila Connectome SNN
 
 #---------------------------------------------------------------------------------

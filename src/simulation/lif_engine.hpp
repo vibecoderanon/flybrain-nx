@@ -27,8 +27,11 @@ struct NeuronState {
 struct SynapticLineEvent {
     uint32_t src_idx;
     uint32_t dst_idx;
+    float progress;           // 0.0f (source) -> 1.0f (destination)
+    float speed;              // Propagation rate per step
     float intensity;          // 1.0f on spike, fades to 0.0f
     uint8_t neuropil_id;
+    bool is_causal;           // True if functional thought pathway conduit
 };
 
 struct NeuropilStats {
@@ -105,6 +108,7 @@ public:
     bool prepareNextDeduction(int& out_r, int& out_c, CellState& out_action, int& out_scan_type, int& out_scan_idx);
     void commitDeduction(int r, int c, CellState action);
     uint32_t getPicrossFocusNeuron() const { return m_picrossFocusNeuron; }
+    void triggerCausalPulse(uint8_t src_neuropil, uint8_t dst_neuropil, float intensity = 1.0f);
 
     /**
      * @brief Spectator Biological Neural Gauges (Stonkfly / Doomfly Inspired)
@@ -135,7 +139,7 @@ public:
     static constexpr uint16_t REFRAC_TICKS = 3;   // 3 ms refractory period
     static constexpr float EPSP_SCALE   = 0.12f;  // Unitary EPSP scaling factor
     static constexpr float GABA_SCALE   = 1.60f;  // Inhibitory scaling for stable balance
-    static constexpr size_t MAX_ACTIVE_LINES = 800; // Visual transmission beams buffer limit
+    static constexpr size_t MAX_ACTIVE_LINES = 48; // Max concurrent causal transmission conduits
 
 private:
     void workerLoop();
@@ -180,6 +184,7 @@ private:
     uint32_t m_spikesCounter = 0;
     uint32_t m_neuropilSpikeCounters[9]{};
     uint32_t m_stepRandState = 123456789;
+    std::vector<uint32_t> m_neuropilNeurons[9]; // Representative neurons per neuropil
 };
 
 } // namespace flybrain
