@@ -18,6 +18,7 @@ import zipfile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RELEASE_DIR = os.path.join(BASE_DIR, "release")
+RELEASES_DIR = os.path.join(BASE_DIR, "releases")
 ROMFS_DIR = os.path.join(BASE_DIR, "romfs")
 NRO_PATH = os.path.join(BASE_DIR, "flybrain-nx.nro")
 XML_PATH = os.path.join(BASE_DIR, "flybrain-nx.xml")
@@ -134,6 +135,7 @@ def generate_xml_metadata(xml_path: str):
 def main():
     print(f"[*] Packaging {APP_TITLE} v{APP_VERSION}...")
     os.makedirs(RELEASE_DIR, exist_ok=True)
+    os.makedirs(RELEASES_DIR, exist_ok=True)
 
     # 1. Ensure icon PNG exists
     ensure_icon_png()
@@ -144,12 +146,33 @@ def main():
     # 3. Compile if devkitPro is available locally
     try_compile_with_devkitpro()
 
-    # 4. Check if production NRO is present (in BASE_DIR or RELEASE_DIR)
+    # 4. Check if production NRO is present (in BASE_DIR, RELEASE_DIR, or RELEASES_DIR)
     source_nro = None
     if os.path.exists(NRO_PATH):
         source_nro = NRO_PATH
-    elif os.path.exists(os.path.join(RELEASE_DIR, "flybrain-nx.nro")):
-        source_nro = os.path.join(RELEASE_DIR, "flybrain-nx.nro")
+    elif os.path.exists(os.path.join(RELEASE_DIR, f"{APP_TITLE}.nro")):
+        source_nro = os.path.join(RELEASE_DIR, f"{APP_TITLE}.nro")
+    elif os.path.exists(os.path.join(RELEASES_DIR, f"{APP_TITLE}.nro")):
+        source_nro = os.path.join(RELEASES_DIR, f"{APP_TITLE}.nro")
+
+    # If missing locally, attempt to retrieve genuine compiled NRO from GitHub Release via gh CLI
+    if not source_nro and shutil.which("gh"):
+        print(f"[*] Checking GitHub Release v{APP_VERSION} for genuine compiled binary via gh CLI...")
+        try:
+            temp_dl = os.path.join(BASE_DIR, ".gh_dl_temp")
+            os.makedirs(temp_dl, exist_ok=True)
+            res = subprocess.run(
+                ["gh", "release", "download", f"v{APP_VERSION}", "--repo", f"{APP_AUTHOR}/{APP_TITLE}", "--dir", temp_dl],
+                capture_output=True, text=True
+            )
+            dl_nro = os.path.join(temp_dl, f"{APP_TITLE}.nro")
+            if res.returncode == 0 and os.path.exists(dl_nro):
+                shutil.copy2(dl_nro, NRO_PATH)
+                source_nro = NRO_PATH
+                print(f"[+] Retrieved genuine compiled NRO from GitHub Release: {source_nro}")
+            shutil.rmtree(temp_dl, ignore_errors=True)
+        except Exception as e:
+            print(f"[!] Note: Could not fetch from GitHub: {e}")
 
     if not source_nro:
         print(
@@ -162,13 +185,17 @@ def main():
     # 5. Embed authentic ASET metadata (Title, Author, Icon)
     attach_aset_metadata(source_nro, ICON_JPG)
 
-    # 6. Copy production binaries into release/
-    dest_nro = os.path.join(RELEASE_DIR, "flybrain-nx.nro")
+    # 6. Copy production binaries into release/ and releases/
+    dest_nro = os.path.join(RELEASE_DIR, f"{APP_TITLE}.nro")
     if source_nro != dest_nro:
         shutil.copy2(source_nro, dest_nro)
 
+    # Always keep a copy in root NRO_PATH as well
+    if source_nro != NRO_PATH:
+        shutil.copy2(source_nro, NRO_PATH)
+
     if os.path.exists(XML_PATH):
-        shutil.copy2(XML_PATH, os.path.join(RELEASE_DIR, "flybrain-nx.xml"))
+        shutil.copy2(XML_PATH, os.path.join(RELEASE_DIR, f"{APP_TITLE}.xml"))
     if os.path.exists(ICON_JPG):
         shutil.copy2(ICON_JPG, os.path.join(RELEASE_DIR, "icon.jpg"))
     if os.path.exists(ICON_PNG):
@@ -180,15 +207,23 @@ def main():
     print(f"[*] Packaging consolidated SD Card zip bundle: {zip_path}...")
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(dest_nro, "switch/flybrain-nx/flybrain-nx.nro")
+        zf.write(dest_nro, f"switch/{APP_TITLE}/{APP_TITLE}.nro")
         if os.path.exists(XML_PATH):
-            zf.write(XML_PATH, "switch/flybrain-nx/flybrain-nx.xml")
+            zf.write(XML_PATH, f"switch/{APP_TITLE}/{APP_TITLE}.xml")
         if os.path.exists(ICON_JPG):
-            zf.write(ICON_JPG, "switch/flybrain-nx/icon.jpg")
+            zf.write(ICON_JPG, f"switch/{APP_TITLE}/icon.jpg")
         if os.path.exists(ICON_PNG):
-            zf.write(ICON_PNG, "switch/flybrain-nx/icon.png")
+            zf.write(ICON_PNG, f"switch/{APP_TITLE}/icon.png")
+
+    # 8. Mirror release bundle and binaries into releases/ for direct user access
+    for fname in os.listdir(RELEASE_DIR):
+        src_f = os.path.join(RELEASE_DIR, fname)
+        dst_f = os.path.join(RELEASES_DIR, fname)
+        if os.path.isfile(src_f):
+            shutil.copy2(src_f, dst_f)
 
     print(f"\n[+] Production NRO: {dest_nro} ({os.path.getsize(dest_nro):,} bytes)")
+    print(f"[+] Releases folder: {RELEASES_DIR}")
     print(f"[+] Release SD Card Archive: {zip_path} ({os.path.getsize(zip_path):,} bytes)")
     print("[+] Release build and ASET embedding completed successfully!")
 
