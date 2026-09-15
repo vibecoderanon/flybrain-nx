@@ -28,7 +28,6 @@ PicrossInputActions SensoryProbes::poll(BrainRenderer& renderer) {
 #ifdef __SWITCH__
     padUpdate(&s_pad);
     u64 kDown = padGetButtonsDown(&s_pad);
-    u64 kHeld = padGetButtons(&s_pad);
 
     if (kDown & HidNpadButton_Plus) {
         actions.exit_requested = true;

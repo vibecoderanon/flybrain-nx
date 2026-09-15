@@ -1,6 +1,8 @@
 #include "hud.hpp"
 #include "draw_utils.hpp"
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 
 namespace flybrain {
 
